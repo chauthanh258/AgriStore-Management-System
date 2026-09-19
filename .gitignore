@@ -1,0 +1,15 @@
+# .NET build outputs
+bin/
+obj/
+
+# User secrets / local config
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+
+# NuGet
+*.nupkg

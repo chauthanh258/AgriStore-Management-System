@@ -1,0 +1,45 @@
+@AgriStore.Api_HostAddress = http://localhost:5274
+@userId = 00000000-0000-0000-0000-000000000000
+@token = paste-jwt-token-here
+
+### Danh sách user
+GET {{AgriStore.Api_HostAddress}}/api/users?page=1&pageSize=20&search=&isActive=true
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết user
+GET {{AgriStore.Api_HostAddress}}/api/users/{{userId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Cập nhật user
+PUT {{AgriStore.Api_HostAddress}}/api/users/{{userId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"fullName": "Nguyen Van A",
+	"email": "user@example.com",
+	"phoneNumber": "0900000000",
+	"avatar": "https://example.com/avatar.png"
+}
+
+### Khóa user
+PATCH {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"isActive": false
+}
+
+### Mở khóa user
+PATCH {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"isActive": true
+}
+
+###
