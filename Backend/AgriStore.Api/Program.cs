@@ -76,6 +76,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
