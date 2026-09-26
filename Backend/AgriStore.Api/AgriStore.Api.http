@@ -43,3 +43,73 @@ Content-Type: application/json
 }
 
 ###
+
+@categoryId = 00000000-0000-0000-0000-000000000000
+@parentCategoryId = 00000000-0000-0000-0000-000000000000
+
+### Danh sách danh mục
+GET {{AgriStore.Api_HostAddress}}/api/categories?page=1&pageSize=20&isActive=true
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Lấy danh mục con trực tiếp
+GET {{AgriStore.Api_HostAddress}}/api/categories?parentId={{parentCategoryId}}&page=1&pageSize=20
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết danh mục
+GET {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo danh mục cha
+POST {{AgriStore.Api_HostAddress}}/api/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Hạt giống",
+	"description": "Các loại hạt giống",
+	"image": "https://example.com/seeds.png",
+	"isActive": true,
+	"sortOrder": 0
+}
+
+### Tạo danh mục con
+POST {{AgriStore.Api_HostAddress}}/api/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Hạt giống rau",
+	"parentId": "{{parentCategoryId}}",
+	"isActive": true,
+	"sortOrder": 0
+}
+
+### Cập nhật danh mục
+PUT {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Hạt giống rau ăn lá",
+	"description": "Hạt giống các loại rau ăn lá",
+	"parentId": "{{parentCategoryId}}",
+	"isActive": true,
+	"sortOrder": 1
+}
+
+### Đổi trạng thái danh mục
+PATCH {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"isActive": false
+}
+
+### Xóa mềm danh mục
+DELETE {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Accept: application/json
