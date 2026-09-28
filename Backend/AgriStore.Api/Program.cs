@@ -52,7 +52,8 @@ builder.Services
                     ?? context.Principal?.FindFirstValue("sub");
                 var user = userId is null ? null : await userManager.FindByIdAsync(userId);
 
-                if (user is null || !user.IsActive)
+                if (context.Principal?.FindFirstValue("token_type") != "access" ||
+                    user is null || !user.IsActive)
                 {
                     context.Fail("Tài khoản không tồn tại hoặc đã bị khóa.");
                 }
@@ -74,6 +75,7 @@ builder.Services
 
 builder.Services.AddAuthorization();
 builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();

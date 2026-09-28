@@ -54,7 +54,20 @@ Swagger chạy tại URL được in trong terminal, thường là `http://local
 
 ## Cách sử dụng API
 
-### 1. Đăng nhập (Login)
+### 1. Đăng ký và đăng nhập
+
+Đăng ký tài khoản Customer bằng `POST /api/auth/register`:
+
+```json
+{
+  "fullName": "Nguyen Van A",
+  "email": "new.customer@example.com",
+  "phoneNumber": "0900000000",
+  "password": "AgriStore123"
+}
+```
+
+Đăng nhập bằng `POST /api/auth/login`:
 
 Gửi `POST /api/auth/login` với body:
 
@@ -65,7 +78,16 @@ Gửi `POST /api/auth/login` với body:
 }
 ```
 
-Response chứa `token` (JWT). Dùng token này cho các endpoint yêu cầu xác thực.
+Response chứa `accessToken` (JWT). API đồng thời đặt `refresh token` vào cookie
+`HttpOnly`, nên refresh token không xuất hiện trong JSON response.
+
+Gọi `POST /api/auth/refresh` để cấp access token mới. Cookie refresh token sẽ
+được xoay vòng trong response. Gọi `POST /api/auth/logout` để xóa cookie trên
+client.
+
+Phiên bản hiện tại chưa lưu refresh token vào database. Vì vậy logout chỉ xóa
+cookie của client; một refresh token đã bị sao chép vẫn có thể dùng đến khi hết
+hạn. Production nên bổ sung bảng refresh token để revoke và rotation server-side.
 
 ### 2. Gọi endpoint có xác thực
 
