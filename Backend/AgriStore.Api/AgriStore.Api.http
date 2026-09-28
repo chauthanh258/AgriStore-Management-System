@@ -2,6 +2,33 @@
 @userId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
+### Đăng ký tài khoản Customer
+POST {{AgriStore.Api_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+	"fullName": "Nguyen Van A",
+	"email": "new.customer@example.com",
+	"phoneNumber": "0900000000",
+	"password": "AgriStore123"
+}
+
+### Đăng nhập và nhận access token
+# Refresh token được API đặt trong HttpOnly cookie.
+POST {{AgriStore.Api_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+	"email": "customer@agristore.local",
+	"password": "AgriStore123"
+}
+
+### Refresh access token bằng cookie
+POST {{AgriStore.Api_HostAddress}}/api/auth/refresh
+
+### Đăng xuất và xóa refresh-token cookie
+POST {{AgriStore.Api_HostAddress}}/api/auth/logout
+
 ### Danh sách user
 GET {{AgriStore.Api_HostAddress}}/api/users?page=1&pageSize=20&search=&isActive=true
 Authorization: Bearer {{token}}
