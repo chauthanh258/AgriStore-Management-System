@@ -10,6 +10,9 @@ public interface IProductService
     Task<ProductServiceResult<ProductResponse>> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken);
     Task<ProductServiceResult<ProductResponse>> SetActiveAsync(Guid id, bool isActive, CancellationToken cancellationToken);
     Task<ProductServiceResult<ProductResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<ProductServiceResult<ProductImageResponse>> UploadImageAsync(Guid productId, IFormFile file, CancellationToken cancellationToken);
+    Task<ProductServiceResult<ProductImageResponse>> SetMainImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken);
+    Task<ProductServiceResult<ProductImageResponse>> DeleteImageAsync(Guid productId, Guid imageId, CancellationToken cancellationToken);
 }
 
 public sealed record ProductServiceResult<T>(

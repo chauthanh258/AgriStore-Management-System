@@ -121,6 +121,10 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.HasKey(item => item.Id);
             entity.Property(item => item.ImageUrl).HasMaxLength(1000).IsRequired();
             entity.HasIndex(item => new { item.ProductId, item.SortOrder });
+            entity.HasIndex(item => item.ProductId)
+                .HasDatabaseName("IX_ProductImages_ProductId_Main")
+                .IsUnique()
+                .HasFilter("\"IsMain\" = TRUE");
             entity.HasOne<Product>().WithMany().HasForeignKey(item => item.ProductId).OnDelete(DeleteBehavior.Cascade);
         });
 
