@@ -4,6 +4,96 @@
 @warehouseId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
+### Danh sách giao dịch kho
+GET {{AgriStore.Api_HostAddress}}/api/stock-transactions?page=1&pageSize=20&warehouseId={{warehouseId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo giao dịch nhập kho nhiều dòng
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"warehouseId": "{{warehouseId}}",
+	"transactionType": "Import",
+	"referenceType": "Manual",
+	"notes": "Nhập bổ sung hàng hóa",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"quantity": 20
+		}
+	]
+}
+
+### Tạo giao dịch xuất kho
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"warehouseId": "{{warehouseId}}",
+	"transactionType": "Export",
+	"referenceType": "Manual",
+	"notes": "Xuất hàng nội bộ",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"quantity": 2
+		}
+	]
+}
+
+### Tạo giao dịch kiểm kê
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"warehouseId": "{{warehouseId}}",
+	"transactionType": "Count",
+	"notes": "Kiểm kê cuối ngày",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"countedQuantity": 18
+		}
+	]
+}
+
+### Tạo giao dịch điều chỉnh
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"warehouseId": "{{warehouseId}}",
+	"transactionType": "Adjust",
+	"notes": "Điều chỉnh do hàng hư hỏng",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"adjustment": -1
+		}
+	]
+}
+
+### Nhận hàng từ đơn nhập
+@purchaseOrderId = 00000000-0000-0000-0000-000000000000
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/receive
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"details": [
+		{
+			"productId": "{{productId}}",
+			"receivedQuantity": 20
+		}
+	]
+}
+
 ### Đăng ký tài khoản Customer
 POST {{AgriStore.Api_HostAddress}}/api/auth/register
 Content-Type: application/json

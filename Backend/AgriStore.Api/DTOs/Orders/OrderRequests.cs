@@ -11,6 +11,7 @@ public sealed record OrderItemRequest(
 
 public sealed record CreatePosOrderRequest(
     Guid? CustomerId,
+    Guid? WarehouseId,
 
     [param: StringLength(1000)]
     string? Note,
@@ -24,6 +25,7 @@ public sealed record CreateOnlineOrderRequest(
     Guid CustomerId,
     Guid ShippingAddressId,
     Guid ShippingMethodId,
+    Guid? WarehouseId,
 
     [param: StringLength(1000)]
     string? Note,
@@ -37,6 +39,7 @@ public sealed record UpdateOrderRequest(
     Guid? CustomerId,
     Guid? ShippingAddressId,
     Guid? ShippingMethodId,
+    Guid? WarehouseId,
 
     [param: StringLength(1000)]
     string? Note,

@@ -14,6 +14,7 @@ public sealed record OrderDetailResponse(
 public sealed record OrderResponse(
     Guid Id,
     string Code,
+    Guid? WarehouseId,
     Guid? CustomerId,
     Guid? UserId,
     DateTime OrderDate,

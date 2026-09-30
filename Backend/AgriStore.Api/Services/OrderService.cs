@@ -1,11 +1,14 @@
 using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.DTOs.Inventories;
 using AgriStore.Api.DTOs.Orders;
 using Microsoft.EntityFrameworkCore;
 
 namespace AgriStore.Api.Services;
 
-public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
+public sealed class OrderService(
+    ApplicationDbContext dbContext,
+    IStockTransactionService stockTransactionService) : IOrderService
 {
     private const int MaxPageSize = 100;
 
@@ -94,6 +97,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
     {
         return CreateAsync(
             request.CustomerId,
+            request.WarehouseId,
             null,
             null,
             request.Note,
@@ -118,6 +122,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
 
         return await CreateAsync(
             request.CustomerId,
+            request.WarehouseId,
             request.ShippingAddressId,
             request.ShippingMethodId,
             request.Note,
@@ -168,6 +173,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
                 cancellationToken);
 
             order.CustomerId = request.CustomerId;
+            order.WarehouseId = await ResolveWarehouseIdAsync(request.WarehouseId, cancellationToken);
             order.ShippingAddressId = request.ShippingAddressId;
             order.ShippingMethodId = request.ShippingMethodId;
         }
@@ -183,6 +189,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
             await ValidateCustomerAsync(request.CustomerId, cancellationToken);
 
             order.CustomerId = request.CustomerId;
+            order.WarehouseId = await ResolveWarehouseIdAsync(request.WarehouseId, cancellationToken);
             order.ShippingAddressId = null;
             order.ShippingMethodId = null;
         }
@@ -233,6 +240,37 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
                 $"Không thể chuyển trạng thái từ {order.Status} sang {nextStatus}.");
         }
 
+        if (order.Status == "Pending" && nextStatus == "Confirmed")
+        {
+            var details = await dbContext.OrderDetails
+                .AsNoTracking()
+                .Where(item => item.OrderId == order.Id)
+                .Select(item => new CreateStockTransactionLineRequest
+                {
+                    ProductId = item.ProductId,
+                    Quantity = item.Quantity
+                })
+                .ToListAsync(cancellationToken);
+
+            var exportResult = await stockTransactionService.CreateAsync(
+                new CreateStockTransactionRequest
+                {
+                    WarehouseId = await ResolveWarehouseIdAsync(order.WarehouseId, cancellationToken),
+                    TransactionType = StockTransactionTypes.Export,
+                    ReferenceType = "Order",
+                    ReferenceId = order.Id,
+                    Notes = $"Xuất kho cho đơn hàng {order.Code}",
+                    Lines = details
+                },
+                order.UserId,
+                cancellationToken);
+
+            if (!exportResult.Succeeded)
+            {
+                throw new InvalidOperationException(string.Join(" ", exportResult.Errors));
+            }
+        }
+
         order.Status = nextStatus;
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -241,6 +279,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
 
     private async Task<OrderResponse> CreateAsync(
         Guid? customerId,
+        Guid? warehouseId,
         Guid? shippingAddressId,
         Guid? shippingMethodId,
         string? note,
@@ -274,6 +313,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
         {
             Id = Guid.NewGuid(),
             Code = GenerateOrderCode(),
+            WarehouseId = await ResolveWarehouseIdAsync(warehouseId, cancellationToken),
             CustomerId = customerId,
             UserId = createdByUserId,
             OrderDate = DateTime.UtcNow,
@@ -442,6 +482,7 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
         return new OrderResponse(
             order.Id,
             order.Code,
+            order.WarehouseId,
             order.CustomerId,
             order.UserId,
             order.OrderDate,
@@ -468,6 +509,27 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
             ("Shipping", "Completed") => true,
             _ => false
         };
+    }
+
+    private async Task<Guid> ResolveWarehouseIdAsync(
+        Guid? warehouseId,
+        CancellationToken cancellationToken)
+    {
+        var warehouse = await dbContext.Warehouses
+            .AsNoTracking()
+            .Where(item => item.IsActive &&
+                           (warehouseId.HasValue
+                               ? item.Id == warehouseId.Value
+                               : item.IsDefault))
+            .Select(item => item.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (warehouse == Guid.Empty)
+        {
+            throw new ArgumentException("Kho xuất không tồn tại hoặc chưa có kho mặc định đang hoạt động.");
+        }
+
+        return warehouse;
     }
 
     private static string GenerateOrderCode()

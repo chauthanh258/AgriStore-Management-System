@@ -158,9 +158,16 @@ public class ApplicationDbContext : IdentityDbContext<
         {
             entity.ToTable("StockTransactions");
             entity.HasKey(item => item.Id);
+            entity.Property(item => item.BatchId);
             entity.Property(item => item.TransactionType).HasMaxLength(30).IsRequired();
             entity.Property(item => item.Quantity).HasPrecision(18, 3);
+            entity.Property(item => item.QuantityBefore).HasPrecision(18, 3);
+            entity.Property(item => item.QuantityAfter).HasPrecision(18, 3);
+            entity.Property(item => item.CountedQuantity).HasPrecision(18, 3);
+            entity.Property(item => item.ReferenceType).HasMaxLength(30);
             entity.HasIndex(item => new { item.ProductId, item.WarehouseId, item.CreatedAt });
+            entity.HasIndex(item => new { item.BatchId, item.CreatedAt });
+            entity.HasIndex(item => new { item.ReferenceType, item.ReferenceId });
             entity.HasOne<Product>().WithMany().HasForeignKey(item => item.ProductId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Warehouse>().WithMany().HasForeignKey(item => item.WarehouseId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(item => item.CreatedBy).OnDelete(DeleteBehavior.SetNull);
