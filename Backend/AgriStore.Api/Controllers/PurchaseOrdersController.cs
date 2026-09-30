@@ -1,10 +1,13 @@
+using System.Security.Claims;
 using AgriStore.Api.DTOs.PurchaseOrders;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
+[Authorize(Roles = "Admin,Manager,Staff")]
 [Route("api/purchase-orders")]
 public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrderService) : ControllerBase
 {
@@ -42,6 +45,33 @@ public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrder
     {
         var result = await purchaseOrderService.UpdateAsync(id, request, cancellationToken);
         return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("{id:guid}/receive")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> Receive(
+        Guid id,
+        ReceivePurchaseOrderRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.ReceiveAsync(
+            id,
+            request,
+            GetCurrentUserId(),
+            cancellationToken);
+
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        return Guid.TryParse(userIdValue, out var userId) ? userId : null;
     }
 
     private ObjectResult Problem(PurchaseOrderServiceResult<PurchaseOrderResponse> result)
