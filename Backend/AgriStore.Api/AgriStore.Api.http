@@ -140,3 +140,112 @@ Content-Type: application/json
 DELETE {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}
 Authorization: Bearer {{token}}
 Accept: application/json
+
+###
+
+@unitId = 00000000-0000-0000-0000-000000000000
+
+### Danh sách đơn vị tính
+GET {{AgriStore.Api_HostAddress}}/api/units?page=1&pageSize=20&search=kg
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết đơn vị tính
+GET {{AgriStore.Api_HostAddress}}/api/units/{{unitId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo đơn vị tính
+POST {{AgriStore.Api_HostAddress}}/api/units
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Bó",
+	"symbol": "bó",
+	"description": "Đơn vị đếm theo bó"
+}
+
+### Cập nhật đơn vị tính
+PUT {{AgriStore.Api_HostAddress}}/api/units/{{unitId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Bó rau",
+	"symbol": "bó",
+	"description": "Đơn vị đếm rau theo bó"
+}
+
+### Xóa đơn vị tính chưa được sử dụng
+DELETE {{AgriStore.Api_HostAddress}}/api/units/{{unitId}}
+Authorization: Bearer {{token}}
+
+###
+
+@productId = 00000000-0000-0000-0000-000000000000
+@productCategoryId = 00000000-0000-0000-0000-000000000000
+@productUnitId = 00000000-0000-0000-0000-000000000000
+
+### Danh sách sản phẩm
+GET {{AgriStore.Api_HostAddress}}/api/products?page=1&pageSize=20&search=rau&categoryId={{productCategoryId}}&isActive=true
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết sản phẩm
+GET {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo sản phẩm
+POST {{AgriStore.Api_HostAddress}}/api/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": "RAU-001",
+	"name": "Rau cải xanh",
+	"categoryId": "{{productCategoryId}}",
+	"unitId": "{{productUnitId}}",
+	"description": "Rau cải xanh tươi",
+	"shortDescription": "Cải xanh",
+	"costPrice": 12000,
+	"sellingPrice": 18000,
+	"minStockAlert": 5,
+	"expiryDays": 7,
+	"isActive": true,
+	"isFeatured": false
+}
+
+### Cập nhật sản phẩm
+PUT {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": "RAU-001",
+	"name": "Rau cải xanh tươi",
+	"categoryId": "{{productCategoryId}}",
+	"unitId": "{{productUnitId}}",
+	"description": "Rau cải xanh tươi",
+	"shortDescription": "Cải xanh",
+	"costPrice": 12000,
+	"sellingPrice": 18000,
+	"minStockAlert": 5,
+	"expiryDays": 7,
+	"isActive": true,
+	"isFeatured": false
+}
+
+### Ngừng kinh doanh sản phẩm
+DELETE {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
+Authorization: Bearer {{token}}
+
+### Kích hoạt lại sản phẩm
+PATCH {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"isActive": true
+}
