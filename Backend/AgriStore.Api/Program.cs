@@ -78,6 +78,7 @@ builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
+builder.Services.AddScoped<IInventoryService, InventoryService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

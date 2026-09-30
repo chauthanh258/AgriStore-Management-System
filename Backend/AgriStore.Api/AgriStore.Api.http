@@ -1,5 +1,7 @@
 @AgriStore.Api_HostAddress = http://localhost:5274
 @userId = 00000000-0000-0000-0000-000000000000
+@productId = 00000000-0000-0000-0000-000000000000
+@warehouseId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
 ### Danh sách user
@@ -111,5 +113,15 @@ Content-Type: application/json
 
 ### Xóa mềm danh mục
 DELETE {{AgriStore.Api_HostAddress}}/api/categories/{{categoryId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tra tồn kho theo sản phẩm và/hoặc kho
+GET {{AgriStore.Api_HostAddress}}/api/inventories?productId={{productId}}&warehouseId={{warehouseId}}&page=1&pageSize=20
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Danh sách tồn kho thấp theo từng kho
+GET {{AgriStore.Api_HostAddress}}/api/inventories/low-stock?warehouseId={{warehouseId}}&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
