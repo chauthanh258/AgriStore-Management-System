@@ -196,6 +196,19 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
             .Where(item => item.OrderId == order.Id)
             .ToListAsync(cancellationToken);
 
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        if (order.CouponId.HasValue)
+        {
+            var appliedCouponId = order.CouponId.Value;
+            await dbContext.Coupons
+                .Where(coupon => coupon.Id == appliedCouponId && coupon.UsedCount > 0)
+                .ExecuteUpdateAsync(
+                    setters => setters.SetProperty(coupon => coupon.UsedCount, coupon => coupon.UsedCount - 1),
+                    cancellationToken);
+        }
+
         dbContext.OrderDetails.RemoveRange(oldDetails);
         dbContext.OrderDetails.AddRange(details);
 
@@ -203,11 +216,13 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
 
         order.Note = CleanText(request.Note);
         order.SubTotal = subTotal;
+        order.CouponId = null;
         order.DiscountAmount = 0;
         order.ShippingFee = shippingFee;
         order.TotalAmount = subTotal + shippingFee;
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await MapOrderAsync(order, cancellationToken);
     }
@@ -235,6 +250,111 @@ public sealed class OrderService(ApplicationDbContext dbContext) : IOrderService
 
         order.Status = nextStatus;
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        return await MapOrderAsync(order, cancellationToken);
+    }
+
+    public async Task<OrderResponse?> ApplyCouponAsync(
+        Guid id,
+        ApplyCouponRequest request,
+        CancellationToken cancellationToken)
+    {
+        var order = await dbContext.Orders
+            .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
+
+        if (order is null)
+        {
+            return null;
+        }
+
+        if (!string.Equals(order.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Chỉ được áp dụng mã giảm giá cho đơn hàng đang ở trạng thái Pending.");
+        }
+
+        if (order.CouponId.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Đơn hàng đã áp dụng mã giảm giá.");
+        }
+
+        var code = request.Code.Trim();
+        var coupon = await dbContext.Coupons
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                item => item.Code.ToUpper() == code.ToUpper(),
+                cancellationToken);
+
+        if (coupon is null || !coupon.IsActive)
+        {
+            throw new ArgumentException("Mã giảm giá không tồn tại hoặc đã bị vô hiệu hóa.");
+        }
+
+        var now = DateTime.UtcNow;
+
+        if (now < coupon.StartDate || now > coupon.EndDate)
+        {
+            throw new ArgumentException("Mã giảm giá chưa có hiệu lực hoặc đã hết hạn.");
+        }
+
+        if (coupon.MinOrderAmount.HasValue && order.SubTotal < coupon.MinOrderAmount.Value)
+        {
+            throw new ArgumentException(
+                $"Đơn hàng chưa đạt giá trị tối thiểu {coupon.MinOrderAmount.Value:0.##}.");
+        }
+
+        var discountAmount = coupon.DiscountType.ToUpperInvariant() switch
+        {
+            "PERCENT" => order.SubTotal * coupon.DiscountValue / 100m,
+            "FIXED" => coupon.DiscountValue,
+            _ => throw new ArgumentException("Loại giảm giá của mã không được hỗ trợ.")
+        };
+
+        if (coupon.MaxDiscount.HasValue)
+        {
+            discountAmount = Math.Min(discountAmount, coupon.MaxDiscount.Value);
+        }
+
+        discountAmount = Math.Clamp(discountAmount, 0m, order.SubTotal);
+
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        var couponUsageUpdated = await dbContext.Coupons
+            .Where(item => item.Id == coupon.Id &&
+                           (!item.UsageLimit.HasValue || item.UsedCount < item.UsageLimit.Value))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.UsedCount, item => item.UsedCount + 1),
+                cancellationToken);
+
+        if (couponUsageUpdated == 0)
+        {
+            throw new ArgumentException("Mã giảm giá đã hết lượt sử dụng.");
+        }
+
+        var orderUpdated = await dbContext.Orders
+            .Where(item => item.Id == id &&
+                           item.Status == "Pending" &&
+                           item.CouponId == null)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(item => item.CouponId, coupon.Id)
+                    .SetProperty(item => item.DiscountAmount, discountAmount)
+                    .SetProperty(item => item.TotalAmount, order.SubTotal - discountAmount + order.ShippingFee),
+                cancellationToken);
+
+        if (orderUpdated == 0)
+        {
+            throw new InvalidOperationException(
+                "Đơn hàng đã thay đổi hoặc đã áp dụng mã giảm giá.");
+        }
+
+        order.CouponId = coupon.Id;
+        order.DiscountAmount = discountAmount;
+        order.TotalAmount = order.SubTotal - discountAmount + order.ShippingFee;
+
+        await transaction.CommitAsync(cancellationToken);
 
         return await MapOrderAsync(order, cancellationToken);
     }
