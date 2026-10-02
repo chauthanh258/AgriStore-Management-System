@@ -160,6 +160,41 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
         }
     }
 
+    [HttpPost("{id:guid}/coupon")]
+    [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<OrderResponse>> ApplyCoupon(
+        Guid id,
+        [FromBody] ApplyCouponRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var order = await orderService.ApplyCouponAsync(id, request, cancellationToken);
+            return order is null ? NotFound() : Ok(order);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Không thể áp dụng mã giảm giá.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Không thể áp dụng mã giảm giá.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+    }
+
     private Guid? GetCurrentUserId()
     {
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)

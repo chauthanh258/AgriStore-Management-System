@@ -260,3 +260,30 @@ Accept: application/json
 GET {{AgriStore.Api_HostAddress}}/api/inventories/low-stock?warehouseId={{warehouseId}}&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
+
+###
+
+@orderId = 00000000-0000-0000-0000-000000000000
+
+### Chi tiết đơn hàng, bao gồm các dòng sản phẩm
+GET {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Đổi trạng thái đơn hàng
+PATCH {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"status": "Confirmed"
+}
+
+### Áp dụng coupon cho đơn Pending
+POST {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/coupon
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": "WELCOME10"
+}

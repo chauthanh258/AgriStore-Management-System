@@ -60,3 +60,9 @@ public sealed record UpdateOrderStatusRequest(
     [param: Required(ErrorMessage = "Trạng thái đơn hàng là bắt buộc.")]
     string Status
 );
+
+public sealed record ApplyCouponRequest(
+    [param: Required(ErrorMessage = "Mã giảm giá là bắt buộc.")]
+    [param: StringLength(50, MinimumLength = 1)]
+    string Code
+);
