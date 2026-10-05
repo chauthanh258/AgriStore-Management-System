@@ -44,6 +44,60 @@ public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrder
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
+    [HttpPost("{id:guid}/details")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> AddDetail(
+        Guid id,
+        PurchaseOrderLineRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.AddDetailAsync(id, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpDelete("{id:guid}/details/{detailId:guid}")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> RemoveDetail(
+        Guid id,
+        Guid detailId,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.RemoveDetailAsync(id, detailId, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("{id:guid}/order")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> MarkOrdered(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.MarkOrderedAsync(id, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("{id:guid}/receive")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> Receive(
+        Guid id,
+        PurchaseOrderReceiveRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.ReceiveAsync(id, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
     private ObjectResult Problem(PurchaseOrderServiceResult<PurchaseOrderResponse> result)
     {
         var details = new ProblemDetails

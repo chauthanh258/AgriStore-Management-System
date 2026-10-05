@@ -12,6 +12,21 @@ public interface IPurchaseOrderService
         Guid id,
         PurchaseOrderRequest request,
         CancellationToken cancellationToken);
+    Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> AddDetailAsync(
+        Guid id,
+        PurchaseOrderLineRequest request,
+        CancellationToken cancellationToken);
+    Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> RemoveDetailAsync(
+        Guid id,
+        Guid detailId,
+        CancellationToken cancellationToken);
+    Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> MarkOrderedAsync(
+        Guid id,
+        CancellationToken cancellationToken);
+    Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
+        Guid id,
+        PurchaseOrderReceiveRequest request,
+        CancellationToken cancellationToken);
 }
 
 public sealed record PurchaseOrderServiceResult<T>(

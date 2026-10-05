@@ -1,5 +1,8 @@
 @AgriStore.Api_HostAddress = http://localhost:5274
 @userId = 00000000-0000-0000-0000-000000000000
+@purchaseOrderId = 00000000-0000-0000-0000-000000000000
+@purchaseOrderDetailId = 00000000-0000-0000-0000-000000000000
+@productId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
 ### Danh sách user
@@ -41,5 +44,40 @@ Content-Type: application/json
 {
 	"isActive": true
 }
+
+### Thêm sản phẩm vào đơn nhập
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/details
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"productId": "{{productId}}",
+	"quantity": 10,
+	"unitPrice": 25000
+}
+
+### Xác nhận đơn nhập (Draft -> Ordered)
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/order
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Nhận hàng (Ordered -> Received)
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/receive
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "details": [
+    {
+      "detailId": "{{purchaseOrderDetailId}}",
+      "receivedQuantity": 10
+    }
+  ]
+}
+
+### Xóa sản phẩm khỏi đơn nhập
+DELETE {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/details/{{purchaseOrderDetailId}}
+Authorization: Bearer {{token}}
+Accept: application/json
 
 ###

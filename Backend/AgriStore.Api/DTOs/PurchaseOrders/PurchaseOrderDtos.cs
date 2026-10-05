@@ -57,3 +57,10 @@ public sealed record PurchaseOrderDetailResponse(
     decimal UnitPrice,
     decimal TotalPrice,
     decimal ReceivedQuantity);
+
+public sealed record PurchaseOrderReceiveRequest(
+    IReadOnlyCollection<PurchaseOrderReceiveLineRequest> Details);
+
+public sealed record PurchaseOrderReceiveLineRequest(
+    Guid DetailId,
+    decimal ReceivedQuantity);
