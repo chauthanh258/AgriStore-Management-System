@@ -233,6 +233,7 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
         PurchaseOrderReceiveRequest request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var order = await dbContext.PurchaseOrders
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
@@ -313,7 +314,7 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
                 continue;
             }
 
-            detail.ReceivedQuantity += item.ReceivedQuantity;
+            detail.ReceivedQuantity = item.ReceivedQuantity;
 
             var inventory = await dbContext.Inventories
                 .SingleOrDefaultAsync(
@@ -350,7 +351,6 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
             });
         }
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var claimed = await dbContext.PurchaseOrders
             .Where(item => item.Id == id && item.Status == "Ordered")
             .ExecuteUpdateAsync(

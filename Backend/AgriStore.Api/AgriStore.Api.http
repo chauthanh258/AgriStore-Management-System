@@ -61,7 +61,7 @@ POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/order
 Authorization: Bearer {{token}}
 Accept: application/json
 
-### Nhận hàng (Ordered -> Received)
+### Nhận hàng một lần (Ordered -> Received; số thực nhận có thể thấp hơn số đặt)
 POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/receive
 Authorization: Bearer {{token}}
 Content-Type: application/json
@@ -70,7 +70,7 @@ Content-Type: application/json
   "details": [
     {
       "detailId": "{{purchaseOrderDetailId}}",
-      "receivedQuantity": 10
+      "receivedQuantity": 8
     }
   ]
 }
