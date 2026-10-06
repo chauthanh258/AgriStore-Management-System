@@ -255,16 +255,23 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
                 "Cần cung cấp danh sách sản phẩm nhận hàng.");
         }
 
-        var detailIds = request.Details.Select(item => item.DetailId).Distinct().ToArray();
-        var detailMap = await dbContext.PurchaseOrderDetails
-            .Where(item => item.PurchaseOrderId == id && detailIds.Contains(item.Id))
-            .ToDictionaryAsync(item => item.Id, cancellationToken);
-
-        if (detailMap.Count != detailIds.Length)
+        var detailIds = request.Details.Select(item => item.DetailId).ToArray();
+        if (detailIds.Distinct().Count() != detailIds.Length)
         {
             return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                 400,
-                "Có sản phẩm trong danh sách nhận hàng không thuộc đơn nhập này.");
+                "Không được gửi trùng sản phẩm trong danh sách nhận hàng.");
+        }
+
+        var detailMap = await dbContext.PurchaseOrderDetails
+            .Where(item => item.PurchaseOrderId == id)
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+
+        if (detailMap.Count != detailIds.Length || detailIds.Any(detailId => !detailMap.ContainsKey(detailId)))
+        {
+            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
+                400,
+                "Danh sách nhận hàng phải bao gồm đúng các sản phẩm thuộc đơn nhập này.");
         }
 
         foreach (var item in request.Details)
@@ -289,6 +296,13 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
                     409,
                     $"Sản phẩm {detail.ProductId} đã được nhận hàng trước đó.");
             }
+        }
+
+        if (request.Details.All(item => item.ReceivedQuantity == 0))
+        {
+            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
+                400,
+                "Cần có ít nhất một sản phẩm với số lượng nhận lớn hơn 0.");
         }
 
         foreach (var item in request.Details)
@@ -336,8 +350,24 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
             });
         }
 
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var claimed = await dbContext.PurchaseOrders
+            .Where(item => item.Id == id && item.Status == "Ordered")
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(item => item.Status, "Received"),
+                cancellationToken);
+
+        if (claimed == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
+                409,
+                "Đơn nhập hàng đã được nhận hoặc không còn ở trạng thái Ordered.");
+        }
+
         order.Status = "Received";
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return PurchaseOrderServiceResult<PurchaseOrderResponse>.Success(await MapAsync(order, cancellationToken));
     }
