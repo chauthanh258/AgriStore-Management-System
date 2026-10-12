@@ -8,9 +8,11 @@ namespace AgriStore.Api.Services;
 
 public sealed class UserService(
     ApplicationDbContext dbContext,
-    UserManager<ApplicationUser> userManager) : IUserService
+    UserManager<ApplicationUser> userManager,
+    RoleManager<ApplicationRole> roleManager) : IUserService
 {
     private const int MaxPageSize = 100;
+    private const string AdminRole = "Admin";
 
     public async Task<UserListResponse> GetPagedAsync(
         UserListQuery query,
@@ -60,12 +62,41 @@ public sealed class UserService(
     public async Task<UserServiceResult<UserResponse>> UpdateAsync(
         Guid id,
         UpdateUserRequest request,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
         CancellationToken cancellationToken)
     {
         var user = await userManager.FindByIdAsync(id.ToString());
         if (user is null)
         {
             return UserServiceResult<UserResponse>.Failure(404, "Không tìm thấy user.");
+        }
+
+        var targetRoles = await userManager.GetRolesAsync(user);
+        var actorIsAdmin = actorRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase);
+        if (targetRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase) && !actorIsAdmin)
+        {
+            return UserServiceResult<UserResponse>.Failure(403, "Manager không được cập nhật tài khoản Admin.");
+        }
+
+        var requestedRoles = request.Roles is null
+            ? targetRoles.ToArray()
+            : request.Roles
+                .Where(role => !string.IsNullOrWhiteSpace(role))
+                .Select(role => role.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        foreach (var role in requestedRoles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                return UserServiceResult<UserResponse>.Failure(400, $"Role '{role}' không tồn tại.");
+            }
+        }
+
+        if (!actorIsAdmin && requestedRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase))
+        {
+            return UserServiceResult<UserResponse>.Failure(403, "Manager không được gán role Admin.");
         }
 
         var normalizedEmail = userManager.NormalizeEmail(request.Email);
@@ -93,6 +124,35 @@ public sealed class UserService(
         if (!updateResult.Succeeded)
         {
             return UserServiceResult<UserResponse>.Failure(400, updateResult.Errors.Select(error => error.Description).ToArray());
+        }
+
+        var rolesToRemove = targetRoles.Except(requestedRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+        var rolesToAdd = requestedRoles.Except(targetRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+        if (rolesToRemove.Length > 0)
+        {
+            var removeRolesResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
+            if (!removeRolesResult.Succeeded)
+            {
+                return UserServiceResult<UserResponse>.Failure(400, removeRolesResult.Errors.Select(error => error.Description).ToArray());
+            }
+        }
+
+        if (rolesToAdd.Length > 0)
+        {
+            var addRolesResult = await userManager.AddToRolesAsync(user, rolesToAdd);
+            if (!addRolesResult.Succeeded)
+            {
+                return UserServiceResult<UserResponse>.Failure(400, addRolesResult.Errors.Select(error => error.Description).ToArray());
+            }
+        }
+
+        if (rolesToRemove.Length > 0 || rolesToAdd.Length > 0)
+        {
+            var stampResult = await userManager.UpdateSecurityStampAsync(user);
+            if (!stampResult.Succeeded)
+            {
+                return UserServiceResult<UserResponse>.Failure(400, stampResult.Errors.Select(error => error.Description).ToArray());
+            }
         }
 
         return UserServiceResult<UserResponse>.Success(await MapUserAsync(user));

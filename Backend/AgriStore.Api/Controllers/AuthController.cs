@@ -1,4 +1,5 @@
 using AgriStore.Api.DTOs.Auth;
+using System.Security.Claims;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -68,6 +69,48 @@ public sealed class AuthController(
     {
         Response.Cookies.Delete(RefreshCookieName, GetCookieOptions());
         return NoContent();
+    }
+
+    [HttpPost("change-password")]
+    [Authorize]
+    [ProducesResponseType(typeof(PasswordResetResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<PasswordResetResponse>> ChangePassword(
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(userIdValue, out var userId))
+        {
+            return Unauthorized();
+        }
+
+        var result = await authService.ChangePasswordAsync(userId, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PasswordResetResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PasswordResetResponse>> ForgotPassword(
+        ForgotPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await authService.ForgotPasswordAsync(request, cancellationToken);
+        return Ok(result.Value);
+    }
+
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(PasswordResetResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<PasswordResetResponse>> ResetPassword(
+        ResetPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await authService.ResetPasswordAsync(request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
     private void SetRefreshCookie(string refreshToken)

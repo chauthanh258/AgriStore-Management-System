@@ -43,7 +43,15 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         UpdateUserRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await userService.UpdateAsync(id, request, cancellationToken);
+        var actorIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+        if (!Guid.TryParse(actorIdValue, out var actorId))
+        {
+            return Unauthorized();
+        }
+
+        var actorRoles = User.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
+        var result = await userService.UpdateAsync(id, request, actorId, actorRoles, cancellationToken);
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 

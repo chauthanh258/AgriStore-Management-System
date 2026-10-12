@@ -33,6 +33,34 @@ POST {{AgriStore.Api_HostAddress}}/api/auth/refresh
 ### Đăng xuất và xóa refresh-token cookie
 POST {{AgriStore.Api_HostAddress}}/api/auth/logout
 
+### Đổi mật khẩu khi đã đăng nhập
+POST {{AgriStore.Api_HostAddress}}/api/auth/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"currentPassword": "AgriStore123",
+	"newPassword": "AgriStore456"
+}
+
+### Quên mật khẩu (demo: token được trả trong response)
+POST {{AgriStore.Api_HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+	"email": "admin@agristore.local"
+}
+
+### Đặt lại mật khẩu bằng token từ request trước
+POST {{AgriStore.Api_HostAddress}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+	"email": "admin@agristore.local",
+	"token": "paste-reset-token-here",
+	"newPassword": "AgriStore456"
+}
+
 ### Danh sách user
 GET {{AgriStore.Api_HostAddress}}/api/users?page=1&pageSize=20&search=&isActive=true
 Authorization: Bearer {{token}}
@@ -52,7 +80,8 @@ Content-Type: application/json
 	"fullName": "Nguyen Van A",
 	"email": "user@example.com",
 	"phoneNumber": "0900000000",
-	"avatar": "https://example.com/avatar.png"
+	"avatar": "https://example.com/avatar.png",
+	"roles": ["Staff"]
 }
 
 ### Khóa user

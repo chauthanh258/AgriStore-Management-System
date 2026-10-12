@@ -26,6 +26,35 @@ public sealed record LoginRequest
     public required string Password { get; init; }
 }
 
+public sealed record ChangePasswordRequest
+{
+    [Required]
+    public required string CurrentPassword { get; init; }
+
+    [Required, MinLength(8)]
+    public required string NewPassword { get; init; }
+}
+
+public sealed record ForgotPasswordRequest
+{
+    [Required, EmailAddress, MaxLength(256)]
+    public required string Email { get; init; }
+}
+
+public sealed record ResetPasswordRequest
+{
+    [Required, EmailAddress, MaxLength(256)]
+    public required string Email { get; init; }
+
+    [Required]
+    public required string Token { get; init; }
+
+    [Required, MinLength(8)]
+    public required string NewPassword { get; init; }
+}
+
+public sealed record PasswordResetResponse(string Message, string? ResetToken = null);
+
 public sealed record AuthResponse(
     string AccessToken,
     DateTimeOffset AccessTokenExpiresAt,
