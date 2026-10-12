@@ -3,10 +3,12 @@ using System.Reflection;
 using System.Text;
 using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 
@@ -73,15 +75,26 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy(AuthorizationPolicies.ManageRoles, policy => policy.RequireRole(SystemRoles.Admin));
+    options.AddPolicy(AuthorizationPolicies.ManageUsers, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
+    options.AddPolicy(AuthorizationPolicies.AssignRoles, policy => policy.RequireRole(SystemRoles.Admin));
+    options.AddPolicy(AuthorizationPolicies.ViewProducts, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager, SystemRoles.Customer));
+    options.AddPolicy(AuthorizationPolicies.ManageProducts, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
+    options.AddPolicy(AuthorizationPolicies.ManageOperations, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager, SystemRoles.Staff));
+    options.AddPolicy(AuthorizationPolicies.ManageCatalog, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
+});
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IProductImageStorage, ProductImageStorage>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
@@ -120,6 +133,9 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+var webRootPath = app.Environment.WebRootPath
+    ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot");
+Directory.CreateDirectory(webRootPath);
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -129,6 +145,10 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseAuthentication();
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(webRootPath)
+});
 app.UseAuthorization();
 
 app.MapControllers();

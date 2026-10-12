@@ -1,4 +1,5 @@
 using AgriStore.Api.DTOs.Categories;
+using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 /// <summary>API quản lý danh mục sản phẩm.</summary>
 [ApiController]
-// [Authorize(Roles = "Admin,Manager")]
+// [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
 [Route("api/categories")]
 public sealed class CategoriesController(ICategoryService categoryService) : ControllerBase
 {

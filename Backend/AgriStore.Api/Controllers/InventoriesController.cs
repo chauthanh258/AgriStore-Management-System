@@ -1,4 +1,5 @@
 using AgriStore.Api.DTOs.Inventories;
+using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-// [Authorize(Roles = "Admin,Manager,Staff")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 [Route("api/inventories")]
 public sealed class InventoriesController(IInventoryService inventoryService) : ControllerBase
 {

@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using AgriStore.Api.DTOs.Orders;
+using AgriStore.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +9,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-// [Authorize(Roles = "Admin,Manager,Staff")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpGet]
@@ -156,6 +158,41 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
                 Title = "Không thể cập nhật trạng thái đơn hàng.",
                 Detail = exception.Message,
                 Status = StatusCodes.Status400BadRequest
+            });
+        }
+    }
+
+    [HttpPost("{id:guid}/coupon")]
+    [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<OrderResponse>> ApplyCoupon(
+        Guid id,
+        [FromBody] ApplyCouponRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var order = await orderService.ApplyCouponAsync(id, request, cancellationToken);
+            return order is null ? NotFound() : Ok(order);
+        }
+        catch (ArgumentException exception)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Không thể áp dụng mã giảm giá.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Không thể áp dụng mã giảm giá.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
             });
         }
     }

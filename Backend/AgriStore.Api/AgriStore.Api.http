@@ -1,7 +1,10 @@
 @AgriStore.Api_HostAddress = http://localhost:5274
 @userId = 00000000-0000-0000-0000-000000000000
-@productId = 00000000-0000-0000-0000-000000000000
+@roleId = 00000000-0000-0000-0000-000000000000
 @warehouseId = 00000000-0000-0000-0000-000000000000
+@purchaseOrderId = 00000000-0000-0000-0000-000000000000
+@purchaseOrderDetailId = 00000000-0000-0000-0000-000000000000
+@productId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
 ### Đăng ký tài khoản Customer
@@ -31,6 +34,34 @@ POST {{AgriStore.Api_HostAddress}}/api/auth/refresh
 ### Đăng xuất và xóa refresh-token cookie
 POST {{AgriStore.Api_HostAddress}}/api/auth/logout
 
+### Đổi mật khẩu khi đã đăng nhập
+POST {{AgriStore.Api_HostAddress}}/api/auth/change-password
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"currentPassword": "AgriStore123",
+	"newPassword": "AgriStore456"
+}
+
+### Quên mật khẩu (demo: token được trả trong response)
+POST {{AgriStore.Api_HostAddress}}/api/auth/forgot-password
+Content-Type: application/json
+
+{
+	"email": "admin@agristore.local"
+}
+
+### Đặt lại mật khẩu bằng token từ request trước
+POST {{AgriStore.Api_HostAddress}}/api/auth/reset-password
+Content-Type: application/json
+
+{
+	"email": "admin@agristore.local",
+	"token": "paste-reset-token-here",
+	"newPassword": "AgriStore456"
+}
+
 ### Danh sách user
 GET {{AgriStore.Api_HostAddress}}/api/users?page=1&pageSize=20&search=&isActive=true
 Authorization: Bearer {{token}}
@@ -50,7 +81,8 @@ Content-Type: application/json
 	"fullName": "Nguyen Van A",
 	"email": "user@example.com",
 	"phoneNumber": "0900000000",
-	"avatar": "https://example.com/avatar.png"
+	"avatar": "https://example.com/avatar.png",
+	"roles": ["Staff"]
 }
 
 ### Khóa user
@@ -70,6 +102,97 @@ Content-Type: application/json
 {
 	"isActive": true
 }
+
+### Danh sách role (Admin chỉ)
+GET {{AgriStore.Api_HostAddress}}/api/roles
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết role
+GET {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo role tùy chỉnh
+POST {{AgriStore.Api_HostAddress}}/api/roles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Cashier",
+	"description": "Nhân viên thu ngân"
+}
+
+### Cập nhật role tùy chỉnh
+PUT {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Cashier",
+	"description": "Nhân viên thu ngân tại quầy"
+}
+
+### Xóa role tùy chỉnh chưa được sử dụng
+DELETE {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+
+### Xem role của user (Admin chỉ)
+GET {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Thay toàn bộ role của user
+PUT {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"roles": ["Staff"]
+}
+
+### Gán một role cho user
+POST {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles/Manager
+Authorization: Bearer {{token}}
+
+### Xóa một role khỏi user
+DELETE {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles/Manager
+Authorization: Bearer {{token}}
+
+### Thêm sản phẩm vào đơn nhập
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/details
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"productId": "{{productId}}",
+	"quantity": 10,
+	"unitPrice": 25000
+}
+
+### Xác nhận đơn nhập (Draft -> Ordered)
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/order
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Nhận hàng một lần (Ordered -> Received; số thực nhận có thể thấp hơn số đặt)
+POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/receive
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "details": [
+    {
+      "detailId": "{{purchaseOrderDetailId}}",
+      "receivedQuantity": 8
+    }
+  ]
+}
+
+### Xóa sản phẩm khỏi đơn nhập
+DELETE {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/details/{{purchaseOrderDetailId}}
+Authorization: Bearer {{token}}
+Accept: application/json
 
 ###
 
@@ -186,11 +309,12 @@ Authorization: Bearer {{token}}
 ###
 
 @productId = 00000000-0000-0000-0000-000000000000
+@productImageId = 00000000-0000-0000-0000-000000000000
 @productCategoryId = 00000000-0000-0000-0000-000000000000
 @productUnitId = 00000000-0000-0000-0000-000000000000
 
 ### Danh sách sản phẩm
-GET {{AgriStore.Api_HostAddress}}/api/products?page=1&pageSize=20&search=rau&categoryId={{productCategoryId}}&isActive=true
+GET {{AgriStore.Api_HostAddress}}/api/products?page=1&pageSize=20&search=rau&categoryId={{productCategoryId}}&unitId={{productUnitId}}&minPrice=10000&maxPrice=100000&isActive=true&isFeatured=false&sortBy=sellingPrice&sortDirection=asc
 Authorization: Bearer {{token}}
 Accept: application/json
 
@@ -198,6 +322,26 @@ Accept: application/json
 GET {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
 Authorization: Bearer {{token}}
 Accept: application/json
+
+### Upload một ảnh sản phẩm (thay đường dẫn file mẫu bên dưới)
+POST {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=AgriStoreImageBoundary
+
+--AgriStoreImageBoundary
+Content-Disposition: form-data; name="file"; filename="product.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/product.jpg
+--AgriStoreImageBoundary--
+
+### Đặt ảnh chính
+PATCH {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images/{{productImageId}}/main
+Authorization: Bearer {{token}}
+
+### Xóa ảnh sản phẩm
+DELETE {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images/{{productImageId}}
+Authorization: Bearer {{token}}
 
 ### Tạo sản phẩm
 POST {{AgriStore.Api_HostAddress}}/api/products
@@ -260,3 +404,30 @@ Accept: application/json
 GET {{AgriStore.Api_HostAddress}}/api/inventories/low-stock?warehouseId={{warehouseId}}&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
+
+###
+
+@orderId = 00000000-0000-0000-0000-000000000000
+
+### Chi tiết đơn hàng, bao gồm các dòng sản phẩm
+GET {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Đổi trạng thái đơn hàng
+PATCH {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"status": "Confirmed"
+}
+
+### Áp dụng coupon cho đơn Pending
+POST {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/coupon
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": "WELCOME10"
+}
