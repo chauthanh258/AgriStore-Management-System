@@ -738,6 +738,11 @@ namespace AgriStore.Api.Data.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasDatabaseName("IX_ProductImages_ProductId_Main")
+                        .HasFilter("\"IsMain\" = TRUE");
+
                     b.HasIndex("ProductId", "SortOrder");
 
                     b.ToTable("ProductImages", (string)null);

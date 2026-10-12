@@ -186,11 +186,12 @@ Authorization: Bearer {{token}}
 ###
 
 @productId = 00000000-0000-0000-0000-000000000000
+@productImageId = 00000000-0000-0000-0000-000000000000
 @productCategoryId = 00000000-0000-0000-0000-000000000000
 @productUnitId = 00000000-0000-0000-0000-000000000000
 
 ### Danh sách sản phẩm
-GET {{AgriStore.Api_HostAddress}}/api/products?page=1&pageSize=20&search=rau&categoryId={{productCategoryId}}&isActive=true
+GET {{AgriStore.Api_HostAddress}}/api/products?page=1&pageSize=20&search=rau&categoryId={{productCategoryId}}&unitId={{productUnitId}}&minPrice=10000&maxPrice=100000&isActive=true&isFeatured=false&sortBy=sellingPrice&sortDirection=asc
 Authorization: Bearer {{token}}
 Accept: application/json
 
@@ -198,6 +199,26 @@ Accept: application/json
 GET {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
 Authorization: Bearer {{token}}
 Accept: application/json
+
+### Upload một ảnh sản phẩm (thay đường dẫn file mẫu bên dưới)
+POST {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=AgriStoreImageBoundary
+
+--AgriStoreImageBoundary
+Content-Disposition: form-data; name="file"; filename="product.jpg"
+Content-Type: image/jpeg
+
+< ./path/to/product.jpg
+--AgriStoreImageBoundary--
+
+### Đặt ảnh chính
+PATCH {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images/{{productImageId}}/main
+Authorization: Bearer {{token}}
+
+### Xóa ảnh sản phẩm
+DELETE {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/images/{{productImageId}}
+Authorization: Bearer {{token}}
 
 ### Tạo sản phẩm
 POST {{AgriStore.Api_HostAddress}}/api/products
