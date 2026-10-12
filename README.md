@@ -60,9 +60,22 @@ Swagger chạy tại URL được in trong terminal, thường là `http://local
 
 ```json
 {
-  "fullName": "Nguyen Van A",
-  "email": "new.customer@example.com",
+- `UsersController`: quản lý người dùng và trạng thái tài khoản. `Admin` và `Manager` có thể quản lý user; chỉ `Admin` được gán/xóa role.
+- `RolesController`: CRUD role tại `/api/roles`. Các role hệ thống `Admin`, `Manager`, `Staff`, `Customer` không được đổi tên hoặc xóa.
+- `Auth`: đăng nhập, đăng ký, đổi mật khẩu, quên/đặt lại mật khẩu
   "phoneNumber": "0900000000",
+
+Các policy chính:
+
+| Policy | Role |
+| --- | --- |
+| `ManageRoles`, `AssignRoles` | Admin |
+| `ManageUsers` | Admin, Manager |
+| `ViewProducts` | Admin, Manager, Customer |
+| `ManageProducts`, `ManageCatalog` | Admin, Manager |
+| `ManageOperations` | Admin, Manager, Staff |
+
+Role được ghi trong JWT tại thời điểm đăng nhập. Thay đổi role sẽ áp dụng cho token mới; token cũ có thể tiếp tục giữ claim cũ đến khi hết hạn vì hệ thống chưa có cơ chế revoke JWT server-side.
   "password": "AgriStore123"
 }
 ```

@@ -1,5 +1,6 @@
 @AgriStore.Api_HostAddress = http://localhost:5274
 @userId = 00000000-0000-0000-0000-000000000000
+@roleId = 00000000-0000-0000-0000-000000000000
 @warehouseId = 00000000-0000-0000-0000-000000000000
 @purchaseOrderId = 00000000-0000-0000-0000-000000000000
 @purchaseOrderDetailId = 00000000-0000-0000-0000-000000000000
@@ -101,6 +102,62 @@ Content-Type: application/json
 {
 	"isActive": true
 }
+
+### Danh sách role (Admin chỉ)
+GET {{AgriStore.Api_HostAddress}}/api/roles
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Chi tiết role
+GET {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo role tùy chỉnh
+POST {{AgriStore.Api_HostAddress}}/api/roles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Cashier",
+	"description": "Nhân viên thu ngân"
+}
+
+### Cập nhật role tùy chỉnh
+PUT {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"name": "Cashier",
+	"description": "Nhân viên thu ngân tại quầy"
+}
+
+### Xóa role tùy chỉnh chưa được sử dụng
+DELETE {{AgriStore.Api_HostAddress}}/api/roles/{{roleId}}
+Authorization: Bearer {{token}}
+
+### Xem role của user (Admin chỉ)
+GET {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Thay toàn bộ role của user
+PUT {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"roles": ["Staff"]
+}
+
+### Gán một role cho user
+POST {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles/Manager
+Authorization: Bearer {{token}}
+
+### Xóa một role khỏi user
+DELETE {{AgriStore.Api_HostAddress}}/api/users/{{userId}}/roles/Manager
+Authorization: Bearer {{token}}
 
 ### Thêm sản phẩm vào đơn nhập
 POST {{AgriStore.Api_HostAddress}}/api/purchase-orders/{{purchaseOrderId}}/details

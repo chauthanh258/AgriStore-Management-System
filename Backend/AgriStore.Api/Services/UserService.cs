@@ -1,6 +1,7 @@
 using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
 using AgriStore.Api.DTOs.Users;
+using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,6 @@ public sealed class UserService(
     RoleManager<ApplicationRole> roleManager) : IUserService
 {
     private const int MaxPageSize = 100;
-    private const string AdminRole = "Admin";
 
     public async Task<UserListResponse> GetPagedAsync(
         UserListQuery query,
@@ -73,10 +73,15 @@ public sealed class UserService(
         }
 
         var targetRoles = await userManager.GetRolesAsync(user);
-        var actorIsAdmin = actorRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase);
-        if (targetRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase) && !actorIsAdmin)
+        var actorIsAdmin = actorRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase);
+        if (targetRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase) && !actorIsAdmin)
         {
             return UserServiceResult<UserResponse>.Failure(403, "Manager không được cập nhật tài khoản Admin.");
+        }
+
+        if (request.Roles is not null && !actorIsAdmin)
+        {
+            return UserServiceResult<UserResponse>.Failure(403, "Chỉ Admin được thay đổi role của user.");
         }
 
         var requestedRoles = request.Roles is null
@@ -94,7 +99,7 @@ public sealed class UserService(
             }
         }
 
-        if (!actorIsAdmin && requestedRoles.Contains(AdminRole, StringComparer.OrdinalIgnoreCase))
+        if (!actorIsAdmin && requestedRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase))
         {
             return UserServiceResult<UserResponse>.Failure(403, "Manager không được gán role Admin.");
         }
@@ -177,8 +182,8 @@ public sealed class UserService(
         }
 
         var targetRoles = await userManager.GetRolesAsync(user);
-        if (targetRoles.Contains("Admin", StringComparer.OrdinalIgnoreCase) &&
-            !actorRoles.Contains("Admin", StringComparer.OrdinalIgnoreCase))
+        if (targetRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase) &&
+            !actorRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase))
         {
             return UserServiceResult<UserResponse>.Failure(403, "Manager không được thay đổi trạng thái tài khoản Admin.");
         }
@@ -203,6 +208,220 @@ public sealed class UserService(
 
         return UserServiceResult<UserResponse>.Success(await MapUserAsync(user));
     }
+
+    public async Task<UserServiceResult<UserRolesResponse>> GetRolesAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+        return user is null
+            ? UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy user.")
+            : UserServiceResult<UserRolesResponse>.Success(new UserRolesResponse(
+                user.Id,
+                (await userManager.GetRolesAsync(user)).ToArray()));
+    }
+
+    public async Task<UserServiceResult<UserRolesResponse>> ReplaceRolesAsync(
+        Guid id,
+        IReadOnlyCollection<string> roles,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+        if (user is null)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy user.");
+        }
+
+        var requestedRoles = NormalizeRoles(roles);
+        if (requestedRoles.Length == 0)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(400, "User phải có ít nhất một role.");
+        }
+
+        var validation = await ValidateRoleChangeAsync(user, requestedRoles, actorRoles);
+        if (validation is not null)
+        {
+            return validation;
+        }
+
+        var currentRoles = await userManager.GetRolesAsync(user);
+        var rolesToRemove = currentRoles.Except(requestedRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+        var rolesToAdd = requestedRoles.Except(currentRoles, StringComparer.OrdinalIgnoreCase).ToArray();
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+
+        var result = await ApplyRoleChangesAsync(user, rolesToRemove, rolesToAdd);
+        if (!result.Succeeded)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            return result;
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return UserServiceResult<UserRolesResponse>.Success(new UserRolesResponse(user.Id, requestedRoles));
+    }
+
+    public async Task<UserServiceResult<UserRolesResponse>> AddRoleAsync(
+        Guid id,
+        string roleName,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+        if (user is null)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy user.");
+        }
+
+        var normalizedRole = roleName.Trim();
+        if (!await roleManager.RoleExistsAsync(normalizedRole))
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy role.");
+        }
+
+        var currentRoles = await userManager.GetRolesAsync(user);
+        if (currentRoles.Contains(normalizedRole, StringComparer.OrdinalIgnoreCase))
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(409, "User đã được gán role này.");
+        }
+
+        var validation = await ValidateRoleChangeAsync(user, [.. currentRoles, normalizedRole], actorRoles);
+        if (validation is not null)
+        {
+            return validation;
+        }
+
+        var result = await ApplyRoleChangesAsync(user, [], [normalizedRole]);
+        return result.Succeeded
+            ? UserServiceResult<UserRolesResponse>.Success(new UserRolesResponse(
+                user.Id,
+                [.. currentRoles, normalizedRole]))
+            : result;
+    }
+
+    public async Task<UserServiceResult<UserRolesResponse>> RemoveRoleAsync(
+        Guid id,
+        string roleName,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(id.ToString());
+        if (user is null)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy user.");
+        }
+
+        var role = await roleManager.FindByNameAsync(roleName.Trim());
+        if (role is null)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "Không tìm thấy role.");
+        }
+
+        var currentRoles = await userManager.GetRolesAsync(user);
+        var currentRole = currentRoles.FirstOrDefault(item =>
+            string.Equals(item, role.Name, StringComparison.OrdinalIgnoreCase));
+        if (currentRole is null)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(404, "User chưa được gán role này.");
+        }
+
+        if (currentRoles.Count <= 1)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(400, "Không thể xóa role cuối cùng của user.");
+        }
+
+        if (string.Equals(role.Name, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) &&
+            (await userManager.GetUsersInRoleAsync(role.Name!)).Count <= 1)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(409, "Không thể xóa role Admin cuối cùng.");
+        }
+
+        var result = await ApplyRoleChangesAsync(user, [currentRole], []);
+        return result.Succeeded
+            ? UserServiceResult<UserRolesResponse>.Success(new UserRolesResponse(
+                user.Id,
+                currentRoles.Where(item => !string.Equals(item, currentRole, StringComparison.OrdinalIgnoreCase)).ToArray()))
+            : result;
+    }
+
+    private async Task<UserServiceResult<UserRolesResponse>?> ValidateRoleChangeAsync(
+        ApplicationUser user,
+        IReadOnlyCollection<string> requestedRoles,
+        IReadOnlyCollection<string> actorRoles)
+    {
+        foreach (var role in requestedRoles)
+        {
+            if (!await roleManager.RoleExistsAsync(role))
+            {
+                return UserServiceResult<UserRolesResponse>.Failure(404, $"Không tìm thấy role '{role}'.");
+            }
+        }
+
+        var actorIsAdmin = actorRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase);
+        var currentRoles = await userManager.GetRolesAsync(user);
+        if (currentRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase) && !actorIsAdmin ||
+            requestedRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase) && !actorIsAdmin)
+        {
+            return UserServiceResult<UserRolesResponse>.Failure(403, "Chỉ Admin được quản lý role Admin.");
+        }
+
+        var removingAdmin = currentRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase) &&
+            !requestedRoles.Contains(SystemRoles.Admin, StringComparer.OrdinalIgnoreCase);
+        if (removingAdmin)
+        {
+            var adminRole = await roleManager.FindByNameAsync(SystemRoles.Admin);
+            if (adminRole is not null && (await userManager.GetUsersInRoleAsync(adminRole.Name!)).Count <= 1)
+            {
+                return UserServiceResult<UserRolesResponse>.Failure(409, "Không thể xóa role Admin cuối cùng.");
+            }
+        }
+
+        return null;
+    }
+
+    private async Task<UserServiceResult<UserRolesResponse>> ApplyRoleChangesAsync(
+        ApplicationUser user,
+        IReadOnlyCollection<string> rolesToRemove,
+        IReadOnlyCollection<string> rolesToAdd)
+    {
+        if (rolesToRemove.Count > 0)
+        {
+            var removeResult = await userManager.RemoveFromRolesAsync(user, rolesToRemove);
+            if (!removeResult.Succeeded)
+            {
+                return UserServiceResult<UserRolesResponse>.Failure(400, removeResult.Errors.Select(error => error.Description).ToArray());
+            }
+        }
+
+        if (rolesToAdd.Count > 0)
+        {
+            var addResult = await userManager.AddToRolesAsync(user, rolesToAdd);
+            if (!addResult.Succeeded)
+            {
+                return UserServiceResult<UserRolesResponse>.Failure(400, addResult.Errors.Select(error => error.Description).ToArray());
+            }
+        }
+
+        if (rolesToRemove.Count > 0 || rolesToAdd.Count > 0)
+        {
+            var stampResult = await userManager.UpdateSecurityStampAsync(user);
+            if (!stampResult.Succeeded)
+            {
+                return UserServiceResult<UserRolesResponse>.Failure(400, stampResult.Errors.Select(error => error.Description).ToArray());
+            }
+        }
+
+        return UserServiceResult<UserRolesResponse>.Success(new UserRolesResponse(user.Id, []));
+    }
+
+    private static string[] NormalizeRoles(IEnumerable<string> roles) => roles
+        .Where(role => !string.IsNullOrWhiteSpace(role))
+        .Select(role => role.Trim())
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
 
     private async Task<IReadOnlyCollection<UserResponse>> MapUsersAsync(IEnumerable<ApplicationUser> users)
     {

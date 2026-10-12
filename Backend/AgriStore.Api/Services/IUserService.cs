@@ -18,6 +18,25 @@ public interface IUserService
         Guid actorId,
         IReadOnlyCollection<string> actorRoles,
         CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> GetRolesAsync(Guid id, CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> ReplaceRolesAsync(
+        Guid id,
+        IReadOnlyCollection<string> roles,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> AddRoleAsync(
+        Guid id,
+        string roleName,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> RemoveRoleAsync(
+        Guid id,
+        string roleName,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
 }
 
 public sealed record UserServiceResult<T>(

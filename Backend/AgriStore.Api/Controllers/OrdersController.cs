@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using AgriStore.Api.DTOs.Orders;
+using AgriStore.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,7 +9,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-// [Authorize(Roles = "Admin,Manager,Staff")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpGet]

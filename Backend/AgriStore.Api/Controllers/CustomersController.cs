@@ -1,4 +1,6 @@
 using AgriStore.Api.DTOs.Customers;
+using AgriStore.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-// [Authorize(Roles = "Admin,Manager,Staff")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class CustomersController(ICustomerService customerService) : ControllerBase
 {
     [HttpGet]

@@ -1,4 +1,5 @@
 using AgriStore.Api.DTOs.Products;
+using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Admin,Manager,Customer")]
+// [Authorize(Policy = AuthorizationPolicies.ViewProducts)]
 [Route("api/products")]
 public sealed class ProductsController(IProductService productService) : ControllerBase
 {
@@ -65,7 +66,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpPost("{id:guid}/images")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(ProductImageStorage.MaxFileSizeBytes + 64 * 1024)]
     [RequestFormLimits(MultipartBodyLengthLimit = ProductImageStorage.MaxFileSizeBytes + 64 * 1024)]
@@ -84,7 +85,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpPatch("{id:guid}/images/{imageId:guid}/main")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(typeof(ProductImageResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductImageResponse>> SetMainImage(
@@ -97,7 +98,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpDelete("{id:guid}/images/{imageId:guid}")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteImage(Guid id, Guid imageId, CancellationToken cancellationToken)
@@ -107,7 +108,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpPost]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -122,7 +123,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpPut("{id:guid}")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -137,7 +138,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpPatch("{id:guid}/status")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(typeof(ProductResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductResponse>> SetStatus(
@@ -150,7 +151,7 @@ public sealed class ProductsController(IProductService productService) : Control
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Roles = "Admin,Manager")]
+    // [Authorize(Policy = AuthorizationPolicies.ManageProducts)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
