@@ -45,7 +45,7 @@ public sealed record CreateStockTransactionLineRequest
     public decimal? CountedQuantity { get; init; }
 }
 
-public sealed record StockTransactionQuery
+public sealed record StockTransactionQuery : IValidatableObject
 {
     public string? TransactionType { get; init; }
     public Guid? ProductId { get; init; }
@@ -60,6 +60,30 @@ public sealed record StockTransactionQuery
 
     [Range(1, 100)]
     public int PageSize { get; init; } = 20;
+
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (FromDate.HasValue && ToDate.HasValue && FromDate.Value > ToDate.Value)
+        {
+            yield return new ValidationResult(
+                "FromDate phải nhỏ hơn hoặc bằng ToDate.",
+                [nameof(FromDate), nameof(ToDate)]);
+        }
+
+        if (!string.IsNullOrWhiteSpace(TransactionType) &&
+            !IsSupportedTransactionType(TransactionType.Trim()))
+        {
+            yield return new ValidationResult(
+                "TransactionType phải là Import, Export, Count hoặc Adjust.",
+                [nameof(TransactionType)]);
+        }
+    }
+
+    private static bool IsSupportedTransactionType(string transactionType) =>
+        string.Equals(transactionType, StockTransactionTypes.Import, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(transactionType, StockTransactionTypes.Export, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(transactionType, StockTransactionTypes.Count, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(transactionType, StockTransactionTypes.Adjust, StringComparison.OrdinalIgnoreCase);
 }
 
 public sealed record StockTransactionResponse(

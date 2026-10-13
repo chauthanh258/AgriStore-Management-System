@@ -15,6 +15,7 @@ public sealed class StockTransactionsController(IStockTransactionService stockTr
     /// <summary>Lấy lịch sử phiếu giao dịch kho.</summary>
     [HttpGet]
     [ProducesResponseType(typeof(StockTransactionListResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<StockTransactionListResponse>> GetAll(
         [FromQuery] StockTransactionQuery query,
         CancellationToken cancellationToken)

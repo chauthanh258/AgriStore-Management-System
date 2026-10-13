@@ -4,8 +4,9 @@
 @warehouseId = 00000000-0000-0000-0000-000000000000
 @token = paste-jwt-token-here
 
-### Danh sách giao dịch kho
-GET {{AgriStore.Api_HostAddress}}/api/stock-transactions?page=1&pageSize=20&warehouseId={{warehouseId}}
+### Lọc lịch sử theo khoảng thời gian, sản phẩm và loại giao dịch
+# FromDate gồm thời điểm bắt đầu; ToDate không bao gồm thời điểm kết thúc.
+GET {{AgriStore.Api_HostAddress}}/api/stock-transactions?fromDate=2026-10-01T00:00:00%2B07:00&toDate=2026-10-08T00:00:00%2B07:00&productId={{productId}}&transactionType=Import&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
 

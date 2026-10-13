@@ -146,7 +146,15 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
 
         if (!string.IsNullOrWhiteSpace(query.TransactionType))
         {
-            var transactionType = query.TransactionType.Trim();
+            var requestedType = query.TransactionType.Trim();
+            var transactionType = requestedType.ToUpperInvariant() switch
+            {
+                "IMPORT" => StockTransactionTypes.Import,
+                "EXPORT" => StockTransactionTypes.Export,
+                "COUNT" => StockTransactionTypes.Count,
+                "ADJUST" => StockTransactionTypes.Adjust,
+                _ => requestedType
+            };
             rowsQuery = rowsQuery.Where(item => item.TransactionType == transactionType);
         }
 
@@ -181,19 +189,23 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
             rowsQuery = rowsQuery.Where(item => item.CreatedAt < query.ToDate.Value.UtcDateTime);
         }
 
-        var batchIds = await rowsQuery
-            .GroupBy(item => item.BatchId!.Value)
-            .Select(group => new { BatchId = group.Key, CreatedAt = group.Max(item => item.CreatedAt) })
-            .OrderByDescending(item => item.CreatedAt)
-            .ThenByDescending(item => item.BatchId)
-            .ToListAsync(cancellationToken);
+        var totalCount = await rowsQuery
+            .Select(item => item.BatchId!.Value)
+            .Distinct()
+            .CountAsync(cancellationToken);
 
-        var totalCount = batchIds.Count;
-        var selectedBatchIds = batchIds
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(item => item.BatchId)
-            .ToArray();
+        var skip = ((long)page - 1) * pageSize;
+        var selectedBatchIds = skip > int.MaxValue
+            ? Array.Empty<Guid>()
+            : await rowsQuery
+                .GroupBy(item => item.BatchId!.Value)
+                .Select(group => new { BatchId = group.Key, CreatedAt = group.Max(item => item.CreatedAt) })
+                .OrderByDescending(item => item.CreatedAt)
+                .ThenByDescending(item => item.BatchId)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .Select(item => item.BatchId)
+                .ToArrayAsync(cancellationToken);
 
         var rows = await dbContext.StockTransactions
             .AsNoTracking()
