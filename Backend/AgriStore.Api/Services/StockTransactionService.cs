@@ -27,9 +27,11 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
         var referenceType = Normalize(request.ReferenceType);
         var notes = Normalize(request.Notes);
 
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(
-            IsolationLevel.Serializable,
-            cancellationToken);
+        await using var transaction = dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken)
+            : null;
 
         if (referenceType is not null && request.ReferenceId.HasValue)
         {
@@ -43,7 +45,11 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
 
             if (existingBatchId.HasValue)
             {
-                await transaction.CommitAsync(cancellationToken);
+                if (transaction is not null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                }
+
                 var existing = await GetByIdAsync(existingBatchId.Value, cancellationToken);
                 return StockTransactionServiceResult<StockTransactionResponse>.Success(existing!);
             }
@@ -108,7 +114,10 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
 
         dbContext.StockTransactions.AddRange(stockTransactions);
         await dbContext.SaveChangesAsync(cancellationToken);
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
 
         var response = await GetByIdAsync(batchId, cancellationToken);
         return StockTransactionServiceResult<StockTransactionResponse>.Success(response!, 201);

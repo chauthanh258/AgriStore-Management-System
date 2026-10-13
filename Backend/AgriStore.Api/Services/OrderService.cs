@@ -1,3 +1,4 @@
+using System.Data;
 using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
 using AgriStore.Api.DTOs.Inventories;
@@ -224,6 +225,10 @@ public sealed class OrderService(
         UpdateOrderStatusRequest request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var order = await dbContext.Orders
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
@@ -245,34 +250,35 @@ public sealed class OrderService(
             var details = await dbContext.OrderDetails
                 .AsNoTracking()
                 .Where(item => item.OrderId == order.Id)
-                .Select(item => new CreateStockTransactionLineRequest
-                {
-                    ProductId = item.ProductId,
-                    Quantity = item.Quantity
-                })
                 .ToListAsync(cancellationToken);
 
-            var exportResult = await stockTransactionService.CreateAsync(
-                new CreateStockTransactionRequest
-                {
-                    WarehouseId = await ResolveWarehouseIdAsync(order.WarehouseId, cancellationToken),
-                    TransactionType = StockTransactionTypes.Export,
-                    ReferenceType = "Order",
-                    ReferenceId = order.Id,
-                    Notes = $"Xuất kho cho đơn hàng {order.Code}",
-                    Lines = details
-                },
+            await CreateOrderStockTransactionAsync(
+                order,
+                details,
+                StockTransactionTypes.Export,
+                $"Xuất kho cho đơn hàng {order.Code}",
                 order.UserId,
                 cancellationToken);
+        }
+        else if (order.Status == "Confirmed" && nextStatus == "Cancelled")
+        {
+            var details = await dbContext.OrderDetails
+                .AsNoTracking()
+                .Where(item => item.OrderId == order.Id)
+                .ToListAsync(cancellationToken);
 
-            if (!exportResult.Succeeded)
-            {
-                throw new InvalidOperationException(string.Join(" ", exportResult.Errors));
-            }
+            await CreateOrderStockTransactionAsync(
+                order,
+                details,
+                StockTransactionTypes.Import,
+                $"Hoàn nhập kho do hủy đơn hàng {order.Code}",
+                order.UserId,
+                cancellationToken);
         }
 
         order.Status = nextStatus;
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         return await MapOrderAsync(order, cancellationToken);
     }
@@ -333,16 +339,60 @@ public sealed class OrderService(
         order.SubTotal = details.Sum(item => item.TotalPrice);
         order.TotalAmount = order.SubTotal + order.ShippingFee;
 
-        await using var transaction = await dbContext.Database
-            .BeginTransactionAsync(cancellationToken);
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
 
         dbContext.Orders.Add(order);
         dbContext.OrderDetails.AddRange(details);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (status == "Confirmed")
+        {
+            await CreateOrderStockTransactionAsync(
+                order,
+                details,
+                StockTransactionTypes.Export,
+                $"Xuất kho cho đơn hàng {order.Code}",
+                createdByUserId,
+                cancellationToken);
+        }
+
         await transaction.CommitAsync(cancellationToken);
 
         return await MapOrderAsync(order, cancellationToken);
+    }
+
+    private async Task CreateOrderStockTransactionAsync(
+        Order order,
+        IReadOnlyCollection<OrderDetail> details,
+        string transactionType,
+        string notes,
+        Guid? createdByUserId,
+        CancellationToken cancellationToken)
+    {
+        var result = await stockTransactionService.CreateAsync(
+            new CreateStockTransactionRequest
+            {
+                WarehouseId = await ResolveWarehouseIdAsync(order.WarehouseId, cancellationToken),
+                TransactionType = transactionType,
+                ReferenceType = "Order",
+                ReferenceId = order.Id,
+                Notes = notes,
+                Lines = details.Select(item => new CreateStockTransactionLineRequest
+                {
+                    ProductId = item.ProductId,
+                    Quantity = item.Quantity
+                }).ToArray()
+            },
+            createdByUserId,
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            throw new InvalidOperationException(string.Join(" ", result.Errors));
+        }
     }
 
     private async Task<List<OrderDetail>> BuildOrderDetailsAsync(

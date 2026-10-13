@@ -35,6 +35,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     [HttpPost("pos")]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderResponse>> CreatePos(
         [FromBody] CreatePosOrderRequest request,
         CancellationToken cancellationToken)
@@ -58,6 +59,15 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
                 Title = "Không thể tạo đơn POS.",
                 Detail = exception.Message,
                 Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Không thể tạo đơn POS.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
             });
         }
     }
@@ -163,7 +173,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
         {
             return Conflict(new ProblemDetails
             {
-                Title = "Không thể xác nhận đơn hàng.",
+                Title = "Không thể cập nhật trạng thái đơn hàng.",
                 Detail = exception.Message,
                 Status = StatusCodes.Status409Conflict
             });
