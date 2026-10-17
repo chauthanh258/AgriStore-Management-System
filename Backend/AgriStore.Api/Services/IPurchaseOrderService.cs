@@ -25,7 +25,8 @@ public interface IPurchaseOrderService
         CancellationToken cancellationToken);
     Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
         Guid id,
-        PurchaseOrderReceiveRequest request,
+        ReceivePurchaseOrderRequest request,
+        Guid? createdBy,
         CancellationToken cancellationToken);
 }
 

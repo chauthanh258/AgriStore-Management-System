@@ -37,6 +37,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     [HttpPost("pos")]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderResponse>> CreatePos(
         [FromBody] CreatePosOrderRequest request,
         CancellationToken cancellationToken)
@@ -60,6 +61,15 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
                 Title = "Không thể tạo đơn POS.",
                 Detail = exception.Message,
                 Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Không thể tạo đơn POS.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
             });
         }
     }
@@ -137,6 +147,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<OrderResponse>> UpdateStatus(
         Guid id,
         [FromBody] UpdateOrderStatusRequest request,
@@ -158,6 +169,15 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
                 Title = "Không thể cập nhật trạng thái đơn hàng.",
                 Detail = exception.Message,
                 Status = StatusCodes.Status400BadRequest
+            });
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Không thể cập nhật trạng thái đơn hàng.",
+                Detail = exception.Message,
+                Status = StatusCodes.Status409Conflict
             });
         }
     }

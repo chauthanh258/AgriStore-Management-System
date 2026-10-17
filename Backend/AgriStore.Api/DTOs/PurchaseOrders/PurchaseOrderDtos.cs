@@ -58,9 +58,17 @@ public sealed record PurchaseOrderDetailResponse(
     decimal TotalPrice,
     decimal ReceivedQuantity);
 
-public sealed record PurchaseOrderReceiveRequest(
-    IReadOnlyCollection<PurchaseOrderReceiveLineRequest> Details);
+public sealed record ReceivePurchaseOrderRequest
+{
+    [Required, MinLength(1)]
+    public required IReadOnlyCollection<ReceivePurchaseOrderLineRequest> Details { get; init; }
+}
 
-public sealed record PurchaseOrderReceiveLineRequest(
-    Guid DetailId,
-    decimal ReceivedQuantity);
+public sealed record ReceivePurchaseOrderLineRequest
+{
+    [Required]
+    public Guid ProductId { get; init; }
+
+    [Range(typeof(decimal), "0.001", "999999999999999.999", ParseLimitsInInvariantCulture = true)]
+    public decimal ReceivedQuantity { get; init; }
+}
