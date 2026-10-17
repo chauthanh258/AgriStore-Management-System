@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using AgriStore.Api.DTOs.PurchaseOrders;
 using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Authorization;
@@ -94,11 +95,24 @@ public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrder
     [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<PurchaseOrderResponse>> Receive(
         Guid id,
-        PurchaseOrderReceiveRequest request,
+        ReceivePurchaseOrderRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await purchaseOrderService.ReceiveAsync(id, request, cancellationToken);
+        var result = await purchaseOrderService.ReceiveAsync(
+            id,
+            request,
+            GetCurrentUserId(),
+            cancellationToken);
+
         return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    private Guid? GetCurrentUserId()
+    {
+        var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? User.FindFirstValue("sub");
+
+        return Guid.TryParse(userIdValue, out var userId) ? userId : null;
     }
 
     private ObjectResult Problem(PurchaseOrderServiceResult<PurchaseOrderResponse> result)

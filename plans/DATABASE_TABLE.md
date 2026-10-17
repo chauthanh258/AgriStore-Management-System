@@ -70,10 +70,13 @@ Chi tiết các bảng quan trọng (cột chính)
 
 11. StockTransactions
 
-    Id, ProductId, WarehouseId
-    TransactionType (Import, Export, Adjust, Transfer, Return)
-    Quantity, ReferenceId (liên kết đơn nhập/đơn bán)
+    Id, BatchId, ProductId, WarehouseId
+    TransactionType (Import, Export, Count, Adjust)
+    Quantity (delta), QuantityBefore, QuantityAfter, CountedQuantity
+    ReferenceType, ReferenceId (liên kết đơn nhập/đơn bán)
     Notes, CreatedBy, CreatedAt
+
+    Các dòng có cùng BatchId thuộc cùng một phiếu giao dịch kho.
 
 12. PurchaseOrders
 
@@ -105,6 +108,7 @@ Chi tiết các bảng quan trọng (cột chính)
 16. Orders
 
     Id, Code, CustomerId (FK nullable)
+    WarehouseId (FK nullable – kho xuất)
     UserId (nhân viên tạo đơn – nếu bán tại quầy)
     OrderDate, Status (Pending, Confirmed, Shipping, Completed, Cancelled)
     ShippingAddressId (FK)

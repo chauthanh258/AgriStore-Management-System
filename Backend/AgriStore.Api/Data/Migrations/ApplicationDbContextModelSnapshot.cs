@@ -551,6 +551,9 @@ namespace AgriStore.Api.Data.Migrations
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("WarehouseId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Code")
@@ -912,6 +915,13 @@ namespace AgriStore.Api.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal?>("CountedQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -928,8 +938,20 @@ namespace AgriStore.Api.Data.Migrations
                         .HasPrecision(18, 3)
                         .HasColumnType("numeric(18,3)");
 
+                    b.Property<decimal?>("QuantityAfter")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
+                    b.Property<decimal?>("QuantityBefore")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)");
+
                     b.Property<Guid?>("ReferenceId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ReferenceType")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("TransactionType")
                         .IsRequired()
@@ -944,6 +966,10 @@ namespace AgriStore.Api.Data.Migrations
                     b.HasIndex("CreatedBy");
 
                     b.HasIndex("WarehouseId");
+
+                    b.HasIndex("BatchId", "CreatedAt");
+
+                    b.HasIndex("ReferenceType", "ReferenceId");
 
                     b.HasIndex("ProductId", "WarehouseId", "CreatedAt");
 

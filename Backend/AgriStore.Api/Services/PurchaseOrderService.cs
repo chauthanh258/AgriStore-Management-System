@@ -1,5 +1,6 @@
 using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.DTOs.Inventories;
 using AgriStore.Api.DTOs.PurchaseOrders;
 using Microsoft.EntityFrameworkCore;
 
@@ -230,146 +231,121 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
 
     public async Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
         Guid id,
-        PurchaseOrderReceiveRequest request,
+        ReceivePurchaseOrderRequest request,
+        Guid? createdBy,
         CancellationToken cancellationToken)
     {
-        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
         var order = await dbContext.PurchaseOrders
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
         if (order is null)
         {
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(404, "Không tìm thấy đơn nhập hàng.");
+            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
+                404,
+                "Không tìm thấy đơn nhập hàng.");
         }
 
-        if (order.Status != "Ordered")
+        if (order.Status is "Cancelled" or "Received")
         {
             return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                 409,
-                "Chỉ có thể nhận hàng khi đơn nhập hàng ở trạng thái Ordered.");
+                "Đơn nhập hàng không còn ở trạng thái có thể nhận hàng.");
         }
 
         if (request.Details is null || request.Details.Count == 0)
         {
             return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                 400,
-                "Cần cung cấp danh sách sản phẩm nhận hàng.");
+                "Phiếu nhận hàng phải có ít nhất một sản phẩm.");
         }
 
-        var detailIds = request.Details.Select(item => item.DetailId).ToArray();
-        if (detailIds.Distinct().Count() != detailIds.Length)
+        if (request.Details.GroupBy(item => item.ProductId).Any(group => group.Count() > 1))
         {
             return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                 400,
-                "Không được gửi trùng sản phẩm trong danh sách nhận hàng.");
+                "Không được nhận trùng sản phẩm trong một lần nhận hàng.");
         }
 
-        var detailMap = await dbContext.PurchaseOrderDetails
+        var details = await dbContext.PurchaseOrderDetails
             .Where(item => item.PurchaseOrderId == id)
-            .ToDictionaryAsync(item => item.Id, cancellationToken);
+            .ToListAsync(cancellationToken);
+        var detailByProduct = details.ToDictionary(item => item.ProductId);
 
-        if (detailMap.Count != detailIds.Length || detailIds.Any(detailId => !detailMap.ContainsKey(detailId)))
+        foreach (var receivedLine in request.Details)
         {
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                400,
-                "Danh sách nhận hàng phải bao gồm đúng các sản phẩm thuộc đơn nhập này.");
-        }
-
-        foreach (var item in request.Details)
-        {
-            if (!detailMap.TryGetValue(item.DetailId, out var detail))
+            if (!detailByProduct.TryGetValue(receivedLine.ProductId, out var detail))
             {
                 return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                     400,
-                    "Một hoặc nhiều dòng sản phẩm không hợp lệ.");
+                    $"Sản phẩm {receivedLine.ProductId} không thuộc đơn nhập hàng.");
             }
 
-            if (item.ReceivedQuantity < 0 || item.ReceivedQuantity > detail.Quantity)
-            {
-                return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                    400,
-                    $"Số lượng nhận cho sản phẩm {detail.ProductId} không hợp lệ.");
-            }
-
-            if (detail.ReceivedQuantity > 0)
+            if (receivedLine.ReceivedQuantity <= 0 ||
+                detail.ReceivedQuantity + receivedLine.ReceivedQuantity > detail.Quantity)
             {
                 return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
                     409,
-                    $"Sản phẩm {detail.ProductId} đã được nhận hàng trước đó.");
+                    $"Số lượng nhận của sản phẩm {receivedLine.ProductId} vượt số lượng còn lại.");
             }
         }
 
-        if (request.Details.All(item => item.ReceivedQuantity == 0))
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            System.Data.IsolationLevel.Serializable,
+            cancellationToken);
+
+        var batchId = Guid.NewGuid();
+        foreach (var receivedLine in request.Details)
         {
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                400,
-                "Cần có ít nhất một sản phẩm với số lượng nhận lớn hơn 0.");
-        }
-
-        foreach (var item in request.Details)
-        {
-            var detail = detailMap[item.DetailId];
-            if (item.ReceivedQuantity == 0)
-            {
-                continue;
-            }
-
-            detail.ReceivedQuantity = item.ReceivedQuantity;
-
+            var detail = detailByProduct[receivedLine.ProductId];
             var inventory = await dbContext.Inventories
                 .SingleOrDefaultAsync(
-                    inventoryItem => inventoryItem.ProductId == detail.ProductId && inventoryItem.WarehouseId == order.WarehouseId,
+                    item => item.ProductId == detail.ProductId && item.WarehouseId == order.WarehouseId,
                     cancellationToken);
 
             if (inventory is null)
             {
-                dbContext.Inventories.Add(new Inventory
+                inventory = new Inventory
                 {
                     Id = Guid.NewGuid(),
                     ProductId = detail.ProductId,
                     WarehouseId = order.WarehouseId,
-                    Quantity = item.ReceivedQuantity,
+                    Quantity = 0,
                     ReservedQuantity = 0
-                });
+                };
+                dbContext.Inventories.Add(inventory);
             }
-            else
-            {
-                inventory.Quantity += item.ReceivedQuantity;
-            }
+
+            var quantityBefore = inventory.Quantity;
+            inventory.Quantity += receivedLine.ReceivedQuantity;
+            detail.ReceivedQuantity += receivedLine.ReceivedQuantity;
 
             dbContext.StockTransactions.Add(new StockTransaction
             {
                 Id = Guid.NewGuid(),
+                BatchId = batchId,
                 ProductId = detail.ProductId,
                 WarehouseId = order.WarehouseId,
-                TransactionType = "Import",
-                Quantity = item.ReceivedQuantity,
+                TransactionType = StockTransactionTypes.Import,
+                Quantity = receivedLine.ReceivedQuantity,
+                QuantityBefore = quantityBefore,
+                QuantityAfter = inventory.Quantity,
+                ReferenceType = "PurchaseOrder",
                 ReferenceId = order.Id,
-                Notes = $"Nhập hàng từ đơn {order.Code}",
-                CreatedBy = order.CreatedBy,
+                Notes = $"Nhận hàng từ đơn nhập {order.Code}",
+                CreatedBy = createdBy,
                 CreatedAt = DateTime.UtcNow
             });
         }
 
-        var claimed = await dbContext.PurchaseOrders
-            .Where(item => item.Id == id && item.Status == "Ordered")
-            .ExecuteUpdateAsync(
-                setters => setters.SetProperty(item => item.Status, "Received"),
-                cancellationToken);
+        order.Status = details.All(item => item.ReceivedQuantity >= item.Quantity)
+            ? "Received"
+            : "Ordered";
 
-        if (claimed == 0)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                409,
-                "Đơn nhập hàng đã được nhận hoặc không còn ở trạng thái Ordered.");
-        }
-
-        order.Status = "Received";
         await dbContext.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
 
-        return PurchaseOrderServiceResult<PurchaseOrderResponse>.Success(await MapAsync(order, cancellationToken));
+        return PurchaseOrderServiceResult<PurchaseOrderResponse>.Success(
+            await MapAsync(order, cancellationToken));
     }
 
     private async Task<List<string>> ValidateAsync(PurchaseOrderRequest request, CancellationToken cancellationToken)

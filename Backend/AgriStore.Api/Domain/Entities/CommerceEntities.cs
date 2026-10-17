@@ -83,10 +83,15 @@ public class Inventory
 public class StockTransaction
 {
     public Guid Id { get; set; }
+    public Guid? BatchId { get; set; }
     public Guid ProductId { get; set; }
     public Guid WarehouseId { get; set; }
     public string TransactionType { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
+    public decimal? QuantityBefore { get; set; }
+    public decimal? QuantityAfter { get; set; }
+    public decimal? CountedQuantity { get; set; }
+    public string? ReferenceType { get; set; }
     public Guid? ReferenceId { get; set; }
     public string? Notes { get; set; }
     public Guid? CreatedBy { get; set; }
@@ -148,6 +153,7 @@ public class Order
 {
     public Guid Id { get; set; }
     public string Code { get; set; } = string.Empty;
+    public Guid? WarehouseId { get; set; }
     public Guid? CustomerId { get; set; }
     public Guid? UserId { get; set; }
     public DateTime OrderDate { get; set; }
