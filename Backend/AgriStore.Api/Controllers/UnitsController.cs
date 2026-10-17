@@ -1,4 +1,5 @@
 using AgriStore.Api.DTOs.Units;
+using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 /// <summary>API quản lý đơn vị tính.</summary>
 [ApiController]
-[Authorize(Roles = "Admin,Manager")]
+// [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
 [Route("api/units")]
 public sealed class UnitsController(IUnitService unitService) : ControllerBase
 {

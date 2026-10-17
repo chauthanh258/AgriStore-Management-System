@@ -9,6 +9,7 @@ namespace AgriStore.Api.Controllers;
 [ApiController]
 [Authorize(Roles = "Admin,Manager,Staff")]
 [Route("api/purchase-orders")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrderService) : ControllerBase
 {
     [HttpGet("{id:guid}")]

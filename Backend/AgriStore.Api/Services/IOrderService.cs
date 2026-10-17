@@ -31,4 +31,9 @@ public interface IOrderService
         Guid id,
         UpdateOrderStatusRequest request,
         CancellationToken cancellationToken);
+
+    Task<OrderResponse?> ApplyCouponAsync(
+        Guid id,
+        ApplyCouponRequest request,
+        CancellationToken cancellationToken);
 }

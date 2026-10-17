@@ -19,17 +19,46 @@ public sealed record ProductResponse(
     bool IsActive,
     bool IsFeatured,
     DateTime CreatedAt,
-    DateTime? UpdatedAt);
+    DateTime? UpdatedAt,
+    IReadOnlyCollection<ProductImageResponse> Images);
+
+public sealed record ProductListItemResponse(
+    Guid Id,
+    string Code,
+    string Name,
+    Guid CategoryId,
+    string CategoryName,
+    Guid UnitId,
+    string UnitName,
+    string? Description,
+    string? ShortDescription,
+    decimal CostPrice,
+    decimal SellingPrice,
+    decimal MinStockAlert,
+    int? ExpiryDays,
+    bool IsActive,
+    bool IsFeatured,
+    DateTime CreatedAt,
+    DateTime? UpdatedAt,
+    string? MainImageUrl);
+
+public sealed record ProductImageResponse(Guid Id, string ImageUrl, bool IsMain, int SortOrder);
 
 public sealed record ProductListQuery(
     int Page = 1,
     int PageSize = 20,
     string? Search = null,
     Guid? CategoryId = null,
-    bool? IsActive = null);
+    bool? IsActive = null,
+    Guid? UnitId = null,
+    decimal? MinPrice = null,
+    decimal? MaxPrice = null,
+    bool? IsFeatured = null,
+    string SortBy = "name",
+    string SortDirection = "asc");
 
 public sealed record ProductListResponse(
-    IReadOnlyCollection<ProductResponse> Items,
+    IReadOnlyCollection<ProductListItemResponse> Items,
     int Page,
     int PageSize,
     int TotalCount,

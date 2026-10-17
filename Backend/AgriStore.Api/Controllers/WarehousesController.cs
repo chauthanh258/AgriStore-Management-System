@@ -1,4 +1,6 @@
 using AgriStore.Api.DTOs.Warehouses;
+using AgriStore.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -6,6 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class WarehousesController(IWarehouseService warehouseService) : ControllerBase
 {
     [HttpGet]

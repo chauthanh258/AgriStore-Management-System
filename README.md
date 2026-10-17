@@ -60,9 +60,22 @@ Swagger chạy tại URL được in trong terminal, thường là `http://local
 
 ```json
 {
-  "fullName": "Nguyen Van A",
-  "email": "new.customer@example.com",
+- `UsersController`: quản lý người dùng và trạng thái tài khoản. `Admin` và `Manager` có thể quản lý user; chỉ `Admin` được gán/xóa role.
+- `RolesController`: CRUD role tại `/api/roles`. Các role hệ thống `Admin`, `Manager`, `Staff`, `Customer` không được đổi tên hoặc xóa.
+- `Auth`: đăng nhập, đăng ký, đổi mật khẩu, quên/đặt lại mật khẩu
   "phoneNumber": "0900000000",
+
+Các policy chính:
+
+| Policy | Role |
+| --- | --- |
+| `ManageRoles`, `AssignRoles` | Admin |
+| `ManageUsers` | Admin, Manager |
+| `ViewProducts` | Admin, Manager, Customer |
+| `ManageProducts`, `ManageCatalog` | Admin, Manager |
+| `ManageOperations` | Admin, Manager, Staff |
+
+Role được ghi trong JWT tại thời điểm đăng nhập. Thay đổi role sẽ áp dụng cho token mới; token cũ có thể tiếp tục giữ claim cũ đến khi hết hạn vì hệ thống chưa có cơ chế revoke JWT server-side.
   "password": "AgriStore123"
 }
 ```
@@ -85,6 +98,12 @@ Gọi `POST /api/auth/refresh` để cấp access token mới. Cookie refresh to
 được xoay vòng trong response. Gọi `POST /api/auth/logout` để xóa cookie trên
 client.
 
+Đổi mật khẩu dùng `POST /api/auth/change-password` và yêu cầu access token.
+Luồng quên mật khẩu gồm `POST /api/auth/forgot-password` và
+`POST /api/auth/reset-password`. Hiện tại đây là cơ chế demo: reset token được
+trả trong response của forgot-password để có thể kiểm thử local. Production
+cần gửi token qua email và không trả token trong response.
+
 Phiên bản hiện tại chưa lưu refresh token vào database. Vì vậy logout chỉ xóa
 cookie của client; một refresh token đã bị sao chép vẫn có thể dùng đến khi hết
 hạn. Production nên bổ sung bảng refresh token để revoke và rotation server-side.
@@ -99,8 +118,8 @@ Authorization: Bearer <token>
 
 ### 3. Các module chính
 
-- `UsersController`: quản lý người dùng (`GET /api/users`, `PUT /api/users/{id}`)
-- `Auth`: đăng nhập, đăng ký
+- `UsersController`: quản lý người dùng (`GET /api/users`, `GET /api/users/{id}`, `PUT /api/users/{id}`, `PATCH /api/users/{id}/status`). Các endpoint yêu cầu role `Admin` hoặc `Manager`; Manager không được thao tác tài khoản Admin.
+- `Auth`: đăng nhập, đăng ký, đổi mật khẩu, quên/đặt lại mật khẩu
 - Các bảng nghiệp vụ: sản phẩm, danh mục, kho, đơn hàng, thanh toán, giao hàng, coupon, review, audit log
 
 ### 4. Kiểm tra Swagger

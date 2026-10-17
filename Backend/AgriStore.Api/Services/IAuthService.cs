@@ -15,6 +15,19 @@ public interface IAuthService
     Task<AuthServiceResult<AuthResponse>> RefreshAsync(
         string? refreshToken,
         CancellationToken cancellationToken);
+
+    Task<AuthServiceResult<PasswordResetResponse>> ChangePasswordAsync(
+        Guid userId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken);
+
+    Task<AuthServiceResult<PasswordResetResponse>> ForgotPasswordAsync(
+        ForgotPasswordRequest request,
+        CancellationToken cancellationToken);
+
+    Task<AuthServiceResult<PasswordResetResponse>> ResetPasswordAsync(
+        ResetPasswordRequest request,
+        CancellationToken cancellationToken);
 }
 
 public sealed record AuthServiceResult<T>(
@@ -27,6 +40,9 @@ public sealed record AuthServiceResult<T>(
 
     public static AuthServiceResult<T> Success(T value, string refreshToken) =>
         new(value, StatusCodes.Status200OK, [], refreshToken);
+
+    public static AuthServiceResult<T> Success(T value) =>
+        new(value, StatusCodes.Status200OK, []);
 
     public static AuthServiceResult<T> Created(T value) =>
         new(value, StatusCodes.Status201Created, []);

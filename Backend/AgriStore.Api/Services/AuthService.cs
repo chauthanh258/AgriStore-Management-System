@@ -11,7 +11,8 @@ namespace AgriStore.Api.Services;
 public sealed class AuthService(
     IConfiguration configuration,
     UserManager<ApplicationUser> userManager,
-    RoleManager<ApplicationRole> roleManager) : IAuthService
+    RoleManager<ApplicationRole> roleManager,
+    SignInManager<ApplicationUser> signInManager) : IAuthService
 {
     private const string CustomerRole = "Customer";
     private const string TokenTypeClaim = "token_type";
@@ -78,7 +79,15 @@ public sealed class AuthService(
         CancellationToken cancellationToken)
     {
         var user = await userManager.FindByEmailAsync(request.Email.Trim());
-        if (user is null || !user.IsActive || !await userManager.CheckPasswordAsync(user, request.Password))
+        if (user is null || !user.IsActive)
+        {
+            return AuthServiceResult<AuthResponse>.Failure(
+                StatusCodes.Status401Unauthorized,
+                "Email hoặc mật khẩu không chính xác.");
+        }
+
+        var signInResult = await signInManager.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true);
+        if (!signInResult.Succeeded)
         {
             return AuthServiceResult<AuthResponse>.Failure(
                 StatusCodes.Status401Unauthorized,
@@ -87,6 +96,72 @@ public sealed class AuthService(
 
         var roles = await userManager.GetRolesAsync(user);
         return CreateTokenResult(user, roles);
+    }
+
+    public async Task<AuthServiceResult<PasswordResetResponse>> ChangePasswordAsync(
+        Guid userId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByIdAsync(userId.ToString());
+        if (user is null || !user.IsActive)
+        {
+            return AuthServiceResult<PasswordResetResponse>.Failure(
+                StatusCodes.Status401Unauthorized,
+                "Tài khoản không tồn tại hoặc đã bị khóa.");
+        }
+
+        var result = await userManager.ChangePasswordAsync(user, request.CurrentPassword, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return AuthServiceResult<PasswordResetResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                result.Errors.Select(error => error.Description).ToArray());
+        }
+
+        return AuthServiceResult<PasswordResetResponse>.Success(
+            new PasswordResetResponse("Đổi mật khẩu thành công."));
+    }
+
+    public async Task<AuthServiceResult<PasswordResetResponse>> ForgotPasswordAsync(
+        ForgotPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var response = new PasswordResetResponse(
+            "Nếu email tồn tại, hệ thống đã tạo yêu cầu đặt lại mật khẩu.");
+        var user = await userManager.FindByEmailAsync(request.Email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return AuthServiceResult<PasswordResetResponse>.Success(response);
+        }
+
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        return AuthServiceResult<PasswordResetResponse>.Success(
+            response with { ResetToken = token });
+    }
+
+    public async Task<AuthServiceResult<PasswordResetResponse>> ResetPasswordAsync(
+        ResetPasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await userManager.FindByEmailAsync(request.Email.Trim());
+        if (user is null || !user.IsActive)
+        {
+            return AuthServiceResult<PasswordResetResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                "Token đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.");
+        }
+
+        var result = await userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
+        if (!result.Succeeded)
+        {
+            return AuthServiceResult<PasswordResetResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                result.Errors.Select(error => error.Description).ToArray());
+        }
+
+        return AuthServiceResult<PasswordResetResponse>.Success(
+            new PasswordResetResponse("Đặt lại mật khẩu thành công."));
     }
 
     public async Task<AuthServiceResult<AuthResponse>> RefreshAsync(

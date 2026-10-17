@@ -6,7 +6,10 @@ using Npgsql;
 
 namespace AgriStore.Api.Services;
 
-public sealed class ProductService(ApplicationDbContext dbContext) : IProductService
+public sealed class ProductService(
+    ApplicationDbContext dbContext,
+    IProductImageStorage imageStorage,
+    ILogger<ProductService> logger) : IProductService
 {
     private const int MaxPageSize = 100;
 
@@ -14,28 +17,7 @@ public sealed class ProductService(ApplicationDbContext dbContext) : IProductSer
     {
         var page = Math.Max(query.Page, 1);
         var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
-        var productsQuery =
-            from product in dbContext.Products.AsNoTracking()
-            join category in dbContext.Categories.AsNoTracking() on product.CategoryId equals category.Id
-            join unit in dbContext.Units.AsNoTracking() on product.UnitId equals unit.Id
-            select new ProductResponse(
-                product.Id,
-                product.Code,
-                product.Name,
-                product.CategoryId,
-                category.Name,
-                product.UnitId,
-                unit.Name,
-                product.Description,
-                product.ShortDescription,
-                product.CostPrice,
-                product.SellingPrice,
-                product.MinStockAlert,
-                product.ExpiryDays,
-                product.IsActive,
-                product.IsFeatured,
-                product.CreatedAt,
-                product.UpdatedAt);
+        var productsQuery = dbContext.Products.AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -54,14 +36,76 @@ public sealed class ProductService(ApplicationDbContext dbContext) : IProductSer
             productsQuery = productsQuery.Where(product => product.IsActive == query.IsActive.Value);
         }
 
+        if (query.UnitId.HasValue)
+        {
+            productsQuery = productsQuery.Where(product => product.UnitId == query.UnitId.Value);
+        }
+
+        if (query.MinPrice.HasValue)
+        {
+            productsQuery = productsQuery.Where(product => product.SellingPrice >= query.MinPrice.Value);
+        }
+
+        if (query.MaxPrice.HasValue)
+        {
+            productsQuery = productsQuery.Where(product => product.SellingPrice <= query.MaxPrice.Value);
+        }
+
+        if (query.IsFeatured.HasValue)
+        {
+            productsQuery = productsQuery.Where(product => product.IsFeatured == query.IsFeatured.Value);
+        }
+
         var totalCount = await productsQuery.CountAsync(cancellationToken);
         var skip = (int)Math.Min((long)(page - 1) * pageSize, int.MaxValue);
-        var items = await productsQuery
-            .OrderBy(product => product.Name)
+        var sortBy = query.SortBy?.Trim().ToLowerInvariant() ?? "name";
+        var descending = string.Equals(query.SortDirection, "desc", StringComparison.OrdinalIgnoreCase);
+        var orderedProductsQuery = sortBy switch
+        {
+            "code" => descending
+                ? productsQuery.OrderByDescending(product => product.Code)
+                : productsQuery.OrderBy(product => product.Code),
+            "sellingprice" => descending
+                ? productsQuery.OrderByDescending(product => product.SellingPrice)
+                : productsQuery.OrderBy(product => product.SellingPrice),
+            "createdat" => descending
+                ? productsQuery.OrderByDescending(product => product.CreatedAt)
+                : productsQuery.OrderBy(product => product.CreatedAt),
+            _ => descending
+                ? productsQuery.OrderByDescending(product => product.Name)
+                : productsQuery.OrderBy(product => product.Name)
+        };
+        var pageProductsQuery = orderedProductsQuery
             .ThenBy(product => product.Code)
             .ThenBy(product => product.Id)
             .Skip(skip)
-            .Take(pageSize)
+            .Take(pageSize);
+        var items = await (
+            from product in pageProductsQuery
+            join category in dbContext.Categories.AsNoTracking() on product.CategoryId equals category.Id
+            join unit in dbContext.Units.AsNoTracking() on product.UnitId equals unit.Id
+            select new ProductListItemResponse(
+                product.Id,
+                product.Code,
+                product.Name,
+                product.CategoryId,
+                category.Name,
+                product.UnitId,
+                unit.Name,
+                product.Description,
+                product.ShortDescription,
+                product.CostPrice,
+                product.SellingPrice,
+                product.MinStockAlert,
+                product.ExpiryDays,
+                product.IsActive,
+                product.IsFeatured,
+                product.CreatedAt,
+                product.UpdatedAt,
+                dbContext.ProductImages.AsNoTracking()
+                    .Where(image => image.ProductId == product.Id && image.IsMain)
+                    .Select(image => image.ImageUrl)
+                    .FirstOrDefault()))
             .ToArrayAsync(cancellationToken);
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
@@ -70,7 +114,7 @@ public sealed class ProductService(ApplicationDbContext dbContext) : IProductSer
 
     public async Task<ProductResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
-        return await (
+        var productResponse = await (
             from product in dbContext.Products.AsNoTracking()
             join category in dbContext.Categories.AsNoTracking() on product.CategoryId equals category.Id
             join unit in dbContext.Units.AsNoTracking() on product.UnitId equals unit.Id
@@ -92,8 +136,23 @@ public sealed class ProductService(ApplicationDbContext dbContext) : IProductSer
                 product.IsActive,
                 product.IsFeatured,
                 product.CreatedAt,
-                product.UpdatedAt))
+                product.UpdatedAt,
+                Array.Empty<ProductImageResponse>()))
             .SingleOrDefaultAsync(cancellationToken);
+
+        if (productResponse is null)
+        {
+            return null;
+        }
+
+        var images = await dbContext.ProductImages.AsNoTracking()
+            .Where(image => image.ProductId == id)
+            .OrderBy(image => image.SortOrder)
+            .ThenBy(image => image.Id)
+            .Select(image => new ProductImageResponse(image.Id, image.ImageUrl, image.IsMain, image.SortOrder))
+            .ToArrayAsync(cancellationToken);
+
+        return productResponse with { Images = images };
     }
 
     public async Task<ProductServiceResult<ProductResponse>> CreateAsync(
@@ -225,6 +284,130 @@ public sealed class ProductService(ApplicationDbContext dbContext) : IProductSer
     public Task<ProductServiceResult<ProductResponse>> DeleteAsync(Guid id, CancellationToken cancellationToken)
     {
         return SetActiveAsync(id, false, cancellationToken);
+    }
+
+    public async Task<ProductServiceResult<ProductImageResponse>> UploadImageAsync(
+        Guid productId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (!await dbContext.Products.AsNoTracking().AnyAsync(product => product.Id == productId, cancellationToken))
+        {
+            return ProductServiceResult<ProductImageResponse>.Failure(404, "Không tìm thấy sản phẩm.");
+        }
+
+        var existingImages = await dbContext.ProductImages
+            .Where(image => image.ProductId == productId)
+            .ToArrayAsync(cancellationToken);
+        var storedImage = await imageStorage.SaveAsync(file, cancellationToken);
+        if (!storedImage.Succeeded)
+        {
+            return ProductServiceResult<ProductImageResponse>.Failure(400, storedImage.Error!);
+        }
+
+        var image = new ProductImage
+        {
+            Id = Guid.NewGuid(),
+            ProductId = productId,
+            ImageUrl = storedImage.ImageUrl!,
+            IsMain = !existingImages.Any(item => item.IsMain),
+            SortOrder = existingImages.Length == 0 ? 0 : existingImages.Max(item => item.SortOrder) + 1
+        };
+
+        dbContext.ProductImages.Add(image);
+        try
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch
+        {
+            await TryDeleteStoredImageAsync(image.ImageUrl);
+            throw;
+        }
+
+        return ProductServiceResult<ProductImageResponse>.Success(ToImageResponse(image));
+    }
+
+    public async Task<ProductServiceResult<ProductImageResponse>> SetMainImageAsync(
+        Guid productId,
+        Guid imageId,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var images = await dbContext.ProductImages
+            .Where(image => image.ProductId == productId)
+            .ToArrayAsync(cancellationToken);
+        var target = images.SingleOrDefault(image => image.Id == imageId);
+        if (target is null)
+        {
+            return ProductServiceResult<ProductImageResponse>.Failure(404, "Không tìm thấy ảnh của sản phẩm.");
+        }
+
+        foreach (var image in images)
+        {
+            image.IsMain = false;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        target.IsMain = true;
+        await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return ProductServiceResult<ProductImageResponse>.Success(ToImageResponse(target));
+    }
+
+    public async Task<ProductServiceResult<ProductImageResponse>> DeleteImageAsync(
+        Guid productId,
+        Guid imageId,
+        CancellationToken cancellationToken)
+    {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        var images = await dbContext.ProductImages
+            .Where(image => image.ProductId == productId)
+            .ToArrayAsync(cancellationToken);
+        var imageToDelete = images.SingleOrDefault(image => image.Id == imageId);
+        if (imageToDelete is null)
+        {
+            return ProductServiceResult<ProductImageResponse>.Failure(404, "Không tìm thấy ảnh của sản phẩm.");
+        }
+
+        var replacement = imageToDelete.IsMain
+            ? images.Where(image => image.Id != imageId)
+                .OrderBy(image => image.SortOrder)
+                .ThenBy(image => image.Id)
+                .FirstOrDefault()
+            : null;
+
+        dbContext.ProductImages.Remove(imageToDelete);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        if (replacement is not null)
+        {
+            replacement.IsMain = true;
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        await TryDeleteStoredImageAsync(imageToDelete.ImageUrl);
+
+        return ProductServiceResult<ProductImageResponse>.Success(ToImageResponse(imageToDelete));
+    }
+
+    private async Task TryDeleteStoredImageAsync(string imageUrl)
+    {
+        try
+        {
+            await imageStorage.DeleteAsync(imageUrl, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            logger.LogWarning(exception, "Không thể xóa file ảnh sản phẩm {ImageUrl}.", imageUrl);
+        }
+    }
+
+    private static ProductImageResponse ToImageResponse(ProductImage image)
+    {
+        return new ProductImageResponse(image.Id, image.ImageUrl, image.IsMain, image.SortOrder);
     }
 
     private async Task<(int StatusCode, string Message)?> ValidateAsync(

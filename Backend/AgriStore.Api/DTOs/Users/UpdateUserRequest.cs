@@ -20,4 +20,7 @@ public sealed record UpdateUserRequest
     /// <summary>Đường dẫn avatar của user.</summary>
     [MaxLength(500)]
     public string? Avatar { get; init; }
+
+    /// <summary>Danh sách role được gán cho user.</summary>
+    public IReadOnlyCollection<string>? Roles { get; init; }
 }

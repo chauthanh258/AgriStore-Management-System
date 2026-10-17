@@ -6,10 +6,34 @@ public interface IUserService
 {
     Task<UserListResponse> GetPagedAsync(UserListQuery query, CancellationToken cancellationToken);
     Task<UserResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
-    Task<UserServiceResult<UserResponse>> UpdateAsync(Guid id, UpdateUserRequest request, CancellationToken cancellationToken);
+    Task<UserServiceResult<UserResponse>> UpdateAsync(
+        Guid id,
+        UpdateUserRequest request,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
     Task<UserServiceResult<UserResponse>> SetActiveAsync(
         Guid id,
         bool isActive,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> GetRolesAsync(Guid id, CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> ReplaceRolesAsync(
+        Guid id,
+        IReadOnlyCollection<string> roles,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> AddRoleAsync(
+        Guid id,
+        string roleName,
+        Guid actorId,
+        IReadOnlyCollection<string> actorRoles,
+        CancellationToken cancellationToken);
+    Task<UserServiceResult<UserRolesResponse>> RemoveRoleAsync(
+        Guid id,
+        string roleName,
         Guid actorId,
         IReadOnlyCollection<string> actorRoles,
         CancellationToken cancellationToken);

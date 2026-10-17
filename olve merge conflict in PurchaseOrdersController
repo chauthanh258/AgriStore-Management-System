@@ -1,0 +1,31 @@
+[33mee3b600[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mluong[m[33m, [m[1;31morigin/luong[m[33m)[m HEAD@{0}: checkout: moving from main to luong
+[33m0969627[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m HEAD@{1}: pull origin main: Fast-forward
+[33m4e91f94[m HEAD@{2}: checkout: moving from luong to main
+[33mee3b600[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mluong[m[33m, [m[1;31morigin/luong[m[33m)[m HEAD@{3}: commit: feat: Implement Stock Transaction History API with filtering and pagination
+[33m491d577[m HEAD@{4}: commit: feat: Auto-update inventory on stock transactions and orders
+[33mfc079bb[m HEAD@{5}: reset: moving to fc079bb
+[33m0ee7c1a[m HEAD@{6}: commit: feat: Enhance stock transaction queries with date and product filters, and add validation
+[33ma275b15[m HEAD@{7}: commit: Add migration for PurchaseOrderReceipts table
+[33mfc079bb[m HEAD@{8}: checkout: moving from main to luong
+[33m4e91f94[m HEAD@{9}: checkout: moving from luong to main
+[33mfc079bb[m HEAD@{10}: commit: feat: Add Stock Transaction Service and Migration for Order Warehouse
+[33m4e91f94[m HEAD@{11}: merge main: Fast-forward
+[33m86e94cd[m HEAD@{12}: checkout: moving from main to luong
+[33m4e91f94[m HEAD@{13}: pull origin main: Fast-forward
+[33mf9fbc43[m HEAD@{14}: checkout: moving from luong to main
+[33m86e94cd[m HEAD@{15}: commit: feat: Add inventory management with endpoints for retrieving inventories and low stock items
+[33m33a1aa7[m HEAD@{16}: reset: moving to HEAD~1
+[33mf9fbc43[m HEAD@{17}: checkout: moving from luong to luong
+[33mf9fbc43[m HEAD@{18}: checkout: moving from main to luong
+[33mf9fbc43[m HEAD@{19}: checkout: moving from luong to main
+[33md356a1a[m HEAD@{20}: commit: feat: implement inventories module
+[33mf9fbc43[m HEAD@{21}: checkout: moving from main to luong
+[33mf9fbc43[m HEAD@{22}: checkout: moving from luong to main
+[33mf9fbc43[m HEAD@{23}: reset: moving to HEAD~1
+[33mb63061f[m HEAD@{24}: commit: feat: hoan thanh entity inventories va api lay ton kho, canh bao ton kho thap
+[33mf9fbc43[m HEAD@{25}: checkout: moving from main to luong
+[33mf9fbc43[m HEAD@{26}: pull origin main: Fast-forward
+[33m201dae0[m HEAD@{27}: checkout: moving from feature/api-warehouses to main
+[33m5305a23[m[33m ([m[1;31morigin/feature/api-warehouses[m[33m, [m[1;32mfeature/api-warehouses[m[33m)[m HEAD@{28}: commit: feat: implement API Warehouses
+[33m201dae0[m HEAD@{29}: checkout: moving from main to feature/api-warehouses
+[33m201dae0[m HEAD@{30}: clone: from https://github.com/chauthanh258/AgriStore-Management-System.git

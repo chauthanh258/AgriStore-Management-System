@@ -1,4 +1,6 @@
 using AgriStore.Api.DTOs.Suppliers;
+using AgriStore.Api.Security;
+using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
@@ -7,6 +9,7 @@ namespace AgriStore.Api.Controllers;
 /// <summary>API quản lý nhà cung cấp.</summary>
 [ApiController]
 [Route("api/suppliers")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class SuppliersController(ISupplierService supplierService) : ControllerBase
 {
     /// <summary>Lấy danh sách nhà cung cấp theo điều kiện tìm kiếm và phân trang.</summary>
