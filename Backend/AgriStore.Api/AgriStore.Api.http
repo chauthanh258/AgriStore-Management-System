@@ -585,3 +585,23 @@ Content-Type: application/json
 GET {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/delivery
 Authorization: Bearer {{token}}
 Accept: application/json
+
+### Báo cáo doanh thu theo ngày
+GET {{AgriStore.Api_HostAddress}}/api/reports/revenue?fromDate=2026-10-01&toDate=2026-10-31&groupBy=day
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Báo cáo doanh thu theo tháng
+GET {{AgriStore.Api_HostAddress}}/api/reports/revenue?fromDate=2026-01-01&toDate=2026-12-31&groupBy=month
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Sản phẩm bán chạy
+GET {{AgriStore.Api_HostAddress}}/api/reports/top-selling-products?fromDate=2026-01-01&toDate=2026-12-31&limit=10
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Báo cáo tồn kho theo kho và chỉ lấy hàng sắp hết
+GET {{AgriStore.Api_HostAddress}}/api/reports/inventory?warehouseId={{warehouseId}}&lowStockOnly=true
+Authorization: Bearer {{token}}
+Accept: application/json

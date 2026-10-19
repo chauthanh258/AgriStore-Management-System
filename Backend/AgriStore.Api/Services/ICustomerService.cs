@@ -34,6 +34,10 @@ public interface ICustomerService
         CancellationToken cancellationToken
     );
 
+    Task<AddressBookResponse> GetAddressBookAsync(
+        AddressBookQuery query,
+        CancellationToken cancellationToken);
+
     Task<AddressResponse?> CreateAddressAsync(
         Guid customerId,
         CreateAddressRequest request,

@@ -21,11 +21,7 @@ var jwtKey = builder.Configuration["Jwt:Key"]
     ?? throw new InvalidOperationException("Jwt:Key chưa được cấu hình.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString, postgres =>
-        postgres.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null)));
+    options.UseNpgsql(connectionString));
 
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>
@@ -105,6 +101,12 @@ builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
 builder.Services.AddScoped<IDeliveryService, DeliveryService>();
+builder.Services.AddScoped<IReportService, ReportService>();
+
+builder.Services.AddCors(options => options.AddPolicy("LocalFrontend", policy =>
+    policy.WithOrigins("http://localhost:3000")
+        .AllowAnyHeader()
+        .AllowAnyMethod()));
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -151,6 +153,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors("LocalFrontend");
 app.UseAuthentication();
 app.UseStaticFiles(new StaticFileOptions
 {
