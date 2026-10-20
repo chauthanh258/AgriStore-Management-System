@@ -120,6 +120,8 @@ Authorization: Bearer <token>
 
 - `UsersController`: quản lý người dùng (`GET /api/users`, `GET /api/users/{id}`, `PUT /api/users/{id}`, `PATCH /api/users/{id}/status`). Các endpoint yêu cầu role `Admin` hoặc `Manager`; Manager không được thao tác tài khoản Admin.
 - `Auth`: đăng nhập, đăng ký, đổi mật khẩu, quên/đặt lại mật khẩu
+- `ProductReviewsController`: xem review đã duyệt tại `GET /api/products/{productId}/reviews`; khách hàng có đơn hoàn tất chứa sản phẩm được tạo review tại `POST /api/products/{productId}/reviews`; Admin/Manager xem cả review chờ duyệt bằng `includePending=true`, duyệt hoặc từ chối bằng `PATCH /api/product-reviews/{reviewId}/approval`; chủ review hoặc Admin/Manager có thể xóa bằng `DELETE /api/product-reviews/{reviewId}`. Đăng ký Customer yêu cầu số điện thoại để tạo hồ sơ khách hàng được liên kết với tài khoản.
+- Sản phẩm: mã SKU được trim và lưu chữ hoa, chỉ gồm chữ/số và dấu `.`, `_`, `-`; mã phải duy nhất không phân biệt hoa thường. Giá vốn không âm, giá bán lớn hơn 0, ngưỡng tồn kho không âm; hạn sử dụng nếu có phải lớn hơn 0. Giới hạn phần thập phân lần lượt là 2, 2 và 3 chữ số. Migration validation chuẩn hóa mã và tên hiện có; sẽ dừng nếu dữ liệu vi phạm các ràng buộc mới hoặc mã trùng/sai định dạng sau chuẩn hóa, cần làm sạch dữ liệu trước khi áp dụng.
 - Các bảng nghiệp vụ: sản phẩm, danh mục, kho, đơn hàng, thanh toán, giao hàng, coupon, review, audit log
 
 ### 4. Kiểm tra Swagger

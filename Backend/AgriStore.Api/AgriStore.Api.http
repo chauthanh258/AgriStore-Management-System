@@ -363,6 +363,37 @@ Content-Type: application/json
 	"isFeatured": false
 }
 
+### Mã được chuẩn hóa thành chữ hoa; mã trùng không phân biệt hoa thường trả 409
+POST {{AgriStore.Api_HostAddress}}/api/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": " rau-001 ",
+	"name": "Rau cải xanh trùng mã",
+	"categoryId": "{{productCategoryId}}",
+	"unitId": "{{productUnitId}}",
+	"costPrice": 12000,
+	"sellingPrice": 18000,
+	"minStockAlert": 5
+}
+
+### Dữ liệu không hợp lệ trả 400
+POST {{AgriStore.Api_HostAddress}}/api/products
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"code": "RAU 002",
+	"name": "Rau mã không hợp lệ",
+	"categoryId": "{{productCategoryId}}",
+	"unitId": "{{productUnitId}}",
+	"costPrice": -1,
+	"sellingPrice": 0,
+	"minStockAlert": -1,
+	"expiryDays": 0
+}
+
 ### Cập nhật sản phẩm
 PUT {{AgriStore.Api_HostAddress}}/api/products/{{productId}}
 Authorization: Bearer {{token}}

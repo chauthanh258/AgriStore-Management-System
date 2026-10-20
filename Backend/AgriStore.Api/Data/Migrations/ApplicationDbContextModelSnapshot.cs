@@ -713,7 +713,20 @@ namespace AgriStore.Api.Data.Migrations
 
                     b.HasIndex("UnitId");
 
-                    b.ToTable("Products", (string)null);
+                    b.ToTable("Products", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Products_Code_Canonical", "\"Code\" = upper(btrim(\"Code\")) AND \"Code\" ~ '^[A-Z0-9]+([._-][A-Z0-9]+)*$'");
+
+                            t.HasCheckConstraint("CK_Products_CostPrice_NonNegative", "\"CostPrice\" >= 0");
+
+                            t.HasCheckConstraint("CK_Products_ExpiryDays_Positive", "\"ExpiryDays\" IS NULL OR \"ExpiryDays\" > 0");
+
+                            t.HasCheckConstraint("CK_Products_MinStockAlert_NonNegative", "\"MinStockAlert\" >= 0");
+
+                            t.HasCheckConstraint("CK_Products_Name_Required", "\"Name\" = btrim(\"Name\") AND length(btrim(\"Name\")) > 0");
+
+                            t.HasCheckConstraint("CK_Products_SellingPrice_Positive", "\"SellingPrice\" > 0");
+                        });
                 });
 
             modelBuilder.Entity("AgriStore.Api.Domain.Entities.ProductImage", b =>
