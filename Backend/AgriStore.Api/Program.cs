@@ -23,6 +23,16 @@ var jwtKey = builder.Configuration["Jwt:Key"]
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials(); // chỉ dùng khi cần cookie/token
+    });
+});
 builder.Services
     .AddIdentity<ApplicationUser, ApplicationRole>(options =>
     {
@@ -145,6 +155,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseCors();
 app.UseAuthentication();
 app.UseStaticFiles(new StaticFileOptions
 {

@@ -3,12 +3,13 @@ using AgriStore.Api.DTOs.Inventories;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using AgriStore.Api.Security;
 
 namespace AgriStore.Api.Controllers;
 
 /// <summary>API tạo và tra cứu giao dịch kho.</summary>
 [ApiController]
-[Authorize(Roles = "Admin,Manager,Staff")]
+// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 [Route("api/stock-transactions")]
 public sealed class StockTransactionsController(IStockTransactionService stockTransactionService) : ControllerBase
 {
