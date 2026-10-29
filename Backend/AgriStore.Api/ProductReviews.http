@@ -1,0 +1,37 @@
+@AgriStore.Api_HostAddress = http://localhost:5274
+@productId = 00000000-0000-0000-0000-000000000000
+@reviewId = 00000000-0000-0000-0000-000000000000
+@customerToken = paste-customer-access-token-here
+@managerToken = paste-manager-access-token-here
+
+### Get approved reviews for a product
+GET {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/reviews?page=1&pageSize=20
+Accept: application/json
+
+### Get all reviews, including pending reviews (Admin or Manager)
+GET {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/reviews?page=1&pageSize=20&includePending=true
+Authorization: Bearer {{managerToken}}
+Accept: application/json
+
+### Submit a review (requires a completed order containing this product)
+POST {{AgriStore.Api_HostAddress}}/api/products/{{productId}}/reviews
+Authorization: Bearer {{customerToken}}
+Content-Type: application/json
+
+{
+  "rating": 5,
+  "comment": "Sản phẩm tươi ngon, đóng gói cẩn thận."
+}
+
+### Approve a review (Admin or Manager)
+PATCH {{AgriStore.Api_HostAddress}}/api/product-reviews/{{reviewId}}/approval
+Authorization: Bearer {{managerToken}}
+Content-Type: application/json
+
+{
+  "isApproved": true
+}
+
+### Delete a review (owner, Admin, or Manager)
+DELETE {{AgriStore.Api_HostAddress}}/api/product-reviews/{{reviewId}}
+Authorization: Bearer {{customerToken}}

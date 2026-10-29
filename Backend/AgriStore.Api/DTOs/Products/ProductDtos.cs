@@ -66,14 +66,16 @@ public sealed record ProductListResponse(
 
 public sealed record CreateProductRequest
 {
-    [Required, MaxLength(50)]
+    [Required, MaxLength(50), RegularExpression(@"^\s*[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*\s*$")]
     public required string Code { get; init; }
 
     [Required, MaxLength(200)]
     public required string Name { get; init; }
 
+    [Required]
     public Guid CategoryId { get; init; }
 
+    [Required]
     public Guid UnitId { get; init; }
 
     [MaxLength(2000)]
@@ -82,12 +84,16 @@ public sealed record CreateProductRequest
     [MaxLength(500)]
     public string? ShortDescription { get; init; }
 
+    [Range(typeof(decimal), "0", "9999999999999999.99")]
     public decimal CostPrice { get; init; }
 
+    [Range(typeof(decimal), "0.01", "9999999999999999.99")]
     public decimal SellingPrice { get; init; }
 
+    [Range(typeof(decimal), "0", "999999999999999.999")]
     public decimal MinStockAlert { get; init; }
 
+    [Range(1, int.MaxValue)]
     public int? ExpiryDays { get; init; }
 
     public bool IsActive { get; init; } = true;
@@ -97,14 +103,16 @@ public sealed record CreateProductRequest
 
 public sealed record UpdateProductRequest
 {
-    [Required, MaxLength(50)]
+    [Required, MaxLength(50), RegularExpression(@"^\s*[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*\s*$")]
     public required string Code { get; init; }
 
     [Required, MaxLength(200)]
     public required string Name { get; init; }
 
+    [Required]
     public Guid CategoryId { get; init; }
 
+    [Required]
     public Guid UnitId { get; init; }
 
     [MaxLength(2000)]
@@ -113,12 +121,16 @@ public sealed record UpdateProductRequest
     [MaxLength(500)]
     public string? ShortDescription { get; init; }
 
+    [Range(typeof(decimal), "0", "9999999999999999.99")]
     public decimal CostPrice { get; init; }
 
+    [Range(typeof(decimal), "0.01", "9999999999999999.99")]
     public decimal SellingPrice { get; init; }
 
+    [Range(typeof(decimal), "0", "999999999999999.999")]
     public decimal MinStockAlert { get; init; }
 
+    [Range(1, int.MaxValue)]
     public int? ExpiryDays { get; init; }
 
     public bool IsActive { get; init; } = true;

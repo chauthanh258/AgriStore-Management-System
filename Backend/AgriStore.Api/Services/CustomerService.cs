@@ -143,7 +143,24 @@ public sealed class CustomerService(ApplicationDbContext dbContext) : ICustomerS
             throw new InvalidOperationException("Số điện thoại đã tồn tại.");
         }
 
-        customer.FullName = request.FullName.Trim();
+        var fullName = request.FullName.Trim();
+        await using var transaction = await dbContext.Database
+            .BeginTransactionAsync(cancellationToken);
+
+        if (!string.Equals(customer.FullName, fullName, StringComparison.Ordinal))
+        {
+            var defaultAddress = await dbContext.Addresses
+                .FirstOrDefaultAsync(
+                    address => address.CustomerId == id && address.IsDefault,
+                    cancellationToken);
+
+            if (defaultAddress is not null)
+            {
+                defaultAddress.ReceiverName = fullName;
+            }
+        }
+
+        customer.FullName = fullName;
         customer.Phone = phone;
         customer.Email = CleanText(request.Email);
         customer.Gender = CleanText(request.Gender);
@@ -151,6 +168,7 @@ public sealed class CustomerService(ApplicationDbContext dbContext) : ICustomerS
         customer.Notes = CleanText(request.Notes);
 
         await dbContext.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
 
         var addresses = await GetAddressesAsync(id, cancellationToken);
         return MapCustomer(customer, addresses);
@@ -203,6 +221,59 @@ public sealed class CustomerService(ApplicationDbContext dbContext) : ICustomerS
                 address.DetailAddress,
                 address.IsDefault))
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AddressBookResponse> GetAddressBookAsync(
+        AddressBookQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
+        var addressesQuery =
+            from address in dbContext.Addresses.AsNoTracking()
+            join customer in dbContext.Customers.AsNoTracking()
+                on address.CustomerId equals customer.Id
+            select new { Address = address, Customer = customer };
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim();
+            addressesQuery = addressesQuery.Where(item =>
+                item.Customer.FullName.Contains(search) ||
+                item.Address.ReceiverName.Contains(search) ||
+                item.Address.Phone.Contains(search) ||
+                item.Address.Province.Contains(search) ||
+                item.Address.District.Contains(search) ||
+                item.Address.Ward.Contains(search) ||
+                item.Address.DetailAddress.Contains(search));
+        }
+
+        var totalCount = await addressesQuery.CountAsync(cancellationToken);
+        var items = await addressesQuery
+            .OrderByDescending(item => item.Address.IsDefault)
+            .ThenBy(item => item.Customer.FullName)
+            .ThenBy(item => item.Address.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(item => new AddressBookItemResponse(
+                item.Address.Id,
+                item.Customer.Id,
+                item.Customer.FullName,
+                item.Address.ReceiverName,
+                item.Address.Phone,
+                item.Address.Province,
+                item.Address.District,
+                item.Address.Ward,
+                item.Address.DetailAddress,
+                item.Address.IsDefault))
+            .ToListAsync(cancellationToken);
+
+        return new AddressBookResponse(
+            items,
+            page,
+            pageSize,
+            totalCount,
+            (int)Math.Ceiling(totalCount / (double)pageSize));
     }
 
     public async Task<AddressResponse?> CreateAddressAsync(

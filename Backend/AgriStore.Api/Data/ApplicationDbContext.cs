@@ -101,7 +101,15 @@ public class ApplicationDbContext : IdentityDbContext<
 
         builder.Entity<Product>(entity =>
         {
-            entity.ToTable("Products");
+            entity.ToTable("Products", table =>
+            {
+                table.HasCheckConstraint("CK_Products_Code_Canonical", "\"Code\" = upper(btrim(\"Code\")) AND \"Code\" ~ '^[A-Z0-9]+([._-][A-Z0-9]+)*$'");
+                table.HasCheckConstraint("CK_Products_CostPrice_NonNegative", "\"CostPrice\" >= 0");
+                table.HasCheckConstraint("CK_Products_SellingPrice_Positive", "\"SellingPrice\" > 0");
+                table.HasCheckConstraint("CK_Products_MinStockAlert_NonNegative", "\"MinStockAlert\" >= 0");
+                table.HasCheckConstraint("CK_Products_ExpiryDays_Positive", "\"ExpiryDays\" IS NULL OR \"ExpiryDays\" > 0");
+                table.HasCheckConstraint("CK_Products_Name_Required", "\"Name\" = btrim(\"Name\") AND length(btrim(\"Name\")) > 0");
+            });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.Code).HasMaxLength(50).IsRequired();
             entity.Property(item => item.Name).HasMaxLength(200).IsRequired();

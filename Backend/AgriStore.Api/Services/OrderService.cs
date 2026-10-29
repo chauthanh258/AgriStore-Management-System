@@ -674,9 +674,7 @@ public sealed class OrderService(
         {
             ("Pending", "Confirmed") => true,
             ("Pending", "Cancelled") => true,
-            ("Confirmed", "Shipping") => true,
             ("Confirmed", "Cancelled") => true,
-            ("Shipping", "Completed") => true,
             _ => false
         };
     }
