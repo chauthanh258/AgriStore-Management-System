@@ -553,3 +553,86 @@ Content-Type: application/json
 {
 	"code": "WELCOME10"
 }
+
+### Tạo payment tiền mặt (POS), chuyển khoản mô phỏng hoặc COD
+POST {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/payment
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"paymentMethod": "BankTransfer",
+	"transactionCode": "BANK-DEMO-001",
+	"notes": "Chuyển khoản mô phỏng"
+}
+
+### Xác nhận chuyển khoản thành công
+PATCH {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/payment/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"status": "Paid",
+	"notes": "Đã đối soát giao dịch"
+}
+
+### Xem payment của đơn hàng
+GET {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/payment
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Tạo vận đơn cho đơn online đã xác nhận
+POST {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/delivery
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"trackingCode": "AGR-DEMO-001",
+	"shipperName": "Nguyen Van A",
+	"shipperPhone": "0900000000",
+	"notes": "Giao hàng tiêu chuẩn"
+}
+
+### Bắt đầu giao hàng
+PATCH {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/delivery/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"status": "Shipped",
+	"notes": "Shipper đã nhận hàng"
+}
+
+### Đánh dấu giao thành công; đơn chuyển Completed, COD được ghi Paid
+PATCH {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/delivery/status
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"status": "Delivered",
+	"notes": "Khách đã nhận hàng"
+}
+
+### Xem vận đơn
+GET {{AgriStore.Api_HostAddress}}/api/orders/{{orderId}}/delivery
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Báo cáo doanh thu theo ngày
+GET {{AgriStore.Api_HostAddress}}/api/reports/revenue?fromDate=2026-10-01&toDate=2026-10-31&groupBy=day
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Báo cáo doanh thu theo tháng
+GET {{AgriStore.Api_HostAddress}}/api/reports/revenue?fromDate=2026-01-01&toDate=2026-12-31&groupBy=month
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Sản phẩm bán chạy
+GET {{AgriStore.Api_HostAddress}}/api/reports/top-selling-products?fromDate=2026-01-01&toDate=2026-12-31&limit=10
+Authorization: Bearer {{token}}
+Accept: application/json
+
+### Báo cáo tồn kho theo kho và chỉ lấy hàng sắp hết
+GET {{AgriStore.Api_HostAddress}}/api/reports/inventory?warehouseId={{warehouseId}}&lowStockOnly=true
+Authorization: Bearer {{token}}
+Accept: application/json

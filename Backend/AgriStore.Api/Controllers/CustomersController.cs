@@ -8,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class CustomersController(ICustomerService customerService) : ControllerBase
 {
     [HttpGet]
@@ -18,6 +18,16 @@ public sealed class CustomersController(ICustomerService customerService) : Cont
         CancellationToken cancellationToken)
     {
         var result = await customerService.GetPagedAsync(query, cancellationToken);
+        return Ok(result);
+    }
+
+    [HttpGet("addresses")]
+    [ProducesResponseType(typeof(AddressBookResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<AddressBookResponse>> GetAddressBook(
+        [FromQuery] AddressBookQuery query,
+        CancellationToken cancellationToken)
+    {
+        var result = await customerService.GetAddressBookAsync(query, cancellationToken);
         return Ok(result);
     }
 
