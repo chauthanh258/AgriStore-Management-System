@@ -10,8 +10,8 @@ public sealed record RegisterRequest
     [Required, EmailAddress, MaxLength(256)]
     public required string Email { get; init; }
 
-    [Phone, MaxLength(50)]
-    public string? PhoneNumber { get; init; }
+    [Required, Phone, MaxLength(30)]
+    public required string PhoneNumber { get; init; }
 
     [Required, MinLength(8)]
     public required string Password { get; init; }
