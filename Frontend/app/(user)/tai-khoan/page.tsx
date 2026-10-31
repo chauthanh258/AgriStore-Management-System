@@ -6,7 +6,7 @@ import { customer } from "../../../data/mock";
 export default function AccountPage() {
   const [saved, setSaved] = useState(false);
   return (
-    <main className="mx-auto min-h-[600px] max-w-7xl px-6 py-6">
+    <main className="mx-auto w-7xl px-6 py-6">
       <p className="mb-5 text-[11px] text-[var(--muted)]">
         Trang chủ　›　<b>Tài khoản cá nhân</b>
       </p>
@@ -131,7 +131,7 @@ export default function AccountPage() {
               </div>
             </div>
           </div>
-          <div className="rounded-xl border border-[var(--line)] bg-white p-5">
+          <div id="don-hang" className="scroll-mt-24 rounded-xl border border-[var(--line)] bg-white p-5">
             <h2 className="text-lg font-bold">Lịch sử đơn hàng gần đây</h2>
             <p className="mt-4 rounded-lg bg-[#f3f8f0] p-4 text-xs">
               <b>#AGR-2026-9882</b>　·　Đặt lúc: 08:30 - 24/09/2026{" "}

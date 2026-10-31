@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCart } from "../../../providers/cart-provider";
+import { AccountMenu } from "./account-menu";
 
 export function SiteHeader() {
   const { count } = useCart();
@@ -43,12 +44,7 @@ export function SiteHeader() {
             {count}
           </strong>
         </Link>
-        <Link
-          href="/tai-khoan"
-          className="grid h-8 w-8 place-items-center rounded-full bg-[#f8caa4] text-xs font-bold text-[#7b3d24]"
-        >
-          MA
-        </Link>
+        <AccountMenu />
       </div>
       <nav className="mx-auto flex h-12 max-w-7xl items-center gap-6 px-6 text-xs text-[#526258]">
         <Link

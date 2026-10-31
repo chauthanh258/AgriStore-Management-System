@@ -15,7 +15,7 @@ export function HomeSections() {
           <span className="text-[10px] font-bold tracking-widest text-[var(--green)]">
             ✿ TƯƠI SẠCH MỖI NGÀY TỪ NÔNG TRẠI
           </span>
-          <h1 className="my-3 text-4xl font-extrabold leading-tight">
+          <h1 className="my-3 text-4xl font-bold leading-tight">
             Nông Sản Tươi Ngon Chuẩn VietGAP –<br />
             <em className="text-[var(--green)] not-italic">
               Giao Tận Bếp Trong 2 Giờ
@@ -31,17 +31,17 @@ export function HomeSections() {
           >
             Khám phá nông sản ngay
           </Link>
-          <div className="mt-6 grid grid-cols-3 gap-2 text-[10px]">
+          <div className="mt-6 grid grid-cols-3 gap-2 ">
             <span className="rounded-lg border border-[var(--line)] bg-white p-3">
-              ◉<b className="block">Thu hoạch sáng nay</b>
+              <b className="block">◉ Thu hoạch sáng nay</b>
               <small className="text-[var(--muted)]">Tươi mới mỗi ngày</small>
             </span>
             <span className="rounded-lg border border-[var(--line)] bg-white p-3">
-              ✓<b className="block">VietGAP & hữu cơ</b>
+              <b className="block">✓ VietGAP & hữu cơ</b>
               <small className="text-[var(--muted)]">Chứng nhận rõ ràng</small>
             </span>
             <span className="rounded-lg border border-[var(--line)] bg-white p-3">
-              ϟ<b className="block">Freshship 2-5°C</b>
+              <b className="block">✦ Freshship 2-5°C</b>
               <small className="text-[var(--muted)]">Giữ lạnh tươi ngon</small>
             </span>
           </div>

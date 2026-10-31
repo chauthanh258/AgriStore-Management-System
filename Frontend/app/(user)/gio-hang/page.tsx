@@ -27,7 +27,7 @@ export default function CartPage() {
     0
   );
   return (
-    <main className="mx-auto min-h-[600px] max-w-7xl px-6 py-6">
+    <main className="mx-auto w-7xl px-6 py-6">
       <p className="mb-5 text-[11px] text-[var(--muted)]">
         Trang chủ　›　<b>Giỏ hàng & Thanh toán</b>
       </p>
