@@ -333,6 +333,7 @@ Query `GET /api/orders`: `page`, `pageSize`, `search`, `status`, `customerId`,
 | Method | Endpoint | Body/query | Response |
 | --- | --- | --- | --- |
 | GET | `/api/customers` | `page`, `pageSize`, `search` | `CustomerListResponse` |
+| GET | `/api/customers/addresses` | `page`, `pageSize`, `search` | `AddressBookResponse` |
 | GET | `/api/customers/{id}` | - | `CustomerResponse` |
 | POST | `/api/customers` | `fullName`, `phone`, `email`, `gender`, `dateOfBirth`, `notes` | `CustomerResponse` |
 | PUT | `/api/customers/{id}` | các field trên | `CustomerResponse` |
@@ -347,7 +348,197 @@ Customer có `id`, `fullName`, `phone`, `email`, `gender`, `dateOfBirth`,
 `loyaltyPoints`, `notes`, `addresses`. Địa chỉ có `receiverName`, `phone`,
 `province`, `district`, `ward`, `detailAddress`, `isDefault`.
 
-## 6. Quản trị user và role
+`GET /api/customers/addresses` là danh sách địa chỉ dùng cho màn hình quản trị,
+khác với danh sách địa chỉ lồng trong một customer:
+
+```json
+{
+  "items": [
+    {
+      "id": "00000000-0000-0000-0000-000000000041",
+      "customerId": "00000000-0000-0000-0000-000000000040",
+      "customerName": "Nguyễn Văn A",
+      "receiverName": "Nguyễn Văn A",
+      "phone": "0900000000",
+      "province": "Hà Nội",
+      "district": "Cầu Giấy",
+      "ward": "Dịch Vọng",
+      "detailAddress": "Số 1 đường ABC",
+      "isDefault": true
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
+
+### Thanh toán đơn hàng - `/api/orders/{orderId}/payment`
+
+Các endpoint này yêu cầu policy `ManageOperations` (Admin, Manager hoặc Staff).
+
+| Method | Endpoint | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/api/orders/{orderId}/payment` | - | `PaymentResponse` |
+| POST | `/api/orders/{orderId}/payment` | `CreatePaymentRequest` | `PaymentResponse` |
+| PATCH | `/api/orders/{orderId}/payment/status` | `UpdatePaymentStatusRequest` | `PaymentResponse` |
+
+```json
+// CreatePaymentRequest
+{
+  "paymentMethod": "Cash",
+  "transactionCode": null,
+  "notes": "Thu tiền tại quầy"
+}
+
+// PaymentResponse
+{
+  "id": "00000000-0000-0000-0000-000000000050",
+  "orderId": "00000000-0000-0000-0000-000000000051",
+  "paymentMethod": "Cash",
+  "amount": 125000,
+  "status": "Paid",
+  "transactionCode": null,
+  "paidAt": "2026-10-29T04:09:58Z",
+  "notes": "Thu tiền tại quầy"
+}
+```
+
+`paymentMethod` nhận `Cash`, `BankTransfer` hoặc `CashOnDelivery`.
+`status` nhận `Pending`, `Paid`, `Failed` hoặc `Refunded`. Cập nhật trạng thái
+dùng body `{ "status": "Paid", "notes": "..." }`.
+
+### Giao hàng - `/api/orders/{orderId}/delivery`
+
+Các endpoint này cũng yêu cầu policy `ManageOperations`.
+
+| Method | Endpoint | Body | Response |
+| --- | --- | --- | --- |
+| GET | `/api/orders/{orderId}/delivery` | - | `DeliveryResponse` |
+| POST | `/api/orders/{orderId}/delivery` | `CreateDeliveryRequest` | `DeliveryResponse` |
+| PATCH | `/api/orders/{orderId}/delivery/status` | `UpdateDeliveryStatusRequest` | `DeliveryResponse` |
+
+```json
+// CreateDeliveryRequest
+{
+  "trackingCode": "AGRI-000051",
+  "shipperName": "Trần Văn B",
+  "shipperPhone": "0911111111",
+  "notes": null
+}
+
+// DeliveryResponse
+{
+  "id": "00000000-0000-0000-0000-000000000060",
+  "orderId": "00000000-0000-0000-0000-000000000051",
+  "trackingCode": "AGRI-000051",
+  "shipperName": "Trần Văn B",
+  "shipperPhone": "0911111111",
+  "status": "Shipped",
+  "shippedAt": "2026-10-29T04:30:00Z",
+  "deliveredAt": null,
+  "notes": null
+}
+```
+
+`status` giao hàng nhận `Preparing`, `Shipped`, `Delivered` hoặc `Failed`.
+Cập nhật trạng thái dùng body `{ "status": "Delivered", "notes": "..." }`.
+
+### Đánh giá sản phẩm
+
+#### Danh sách và tạo đánh giá
+
+| Method | Endpoint | Body/query | Quyền | Response |
+| --- | --- | --- | --- | --- |
+| GET | `/api/products/{productId}/reviews` | `page`, `pageSize`, `includePending` | Public; `includePending=true` cần Admin/Manager | `ProductReviewListResponse` |
+| POST | `/api/products/{productId}/reviews` | `{ "rating": 5, "comment": "Rất tươi" }` | Customer | `ProductReviewResponse` |
+
+`rating` là số nguyên từ `1` đến `5`, `comment` không bắt buộc và tối đa 2000
+ký tự. Response danh sách có phân trang chuẩn của tài liệu:
+
+```json
+{
+  "items": [
+    {
+      "id": "00000000-0000-0000-0000-000000000070",
+      "productId": "00000000-0000-0000-0000-000000000020",
+      "customerName": "Nguyễn Văn A",
+      "rating": 5,
+      "comment": "Rất tươi",
+      "isApproved": true,
+      "createdAt": "2026-10-29T04:09:58Z"
+    }
+  ],
+  "page": 1,
+  "pageSize": 20,
+  "totalCount": 1,
+  "totalPages": 1
+}
+```
+
+#### Duyệt và xóa đánh giá
+
+| Method | Endpoint | Body | Quyền | Response |
+| --- | --- | --- | --- | --- |
+| PATCH | `/api/product-reviews/{reviewId}/approval` | `{ "isApproved": true }` | `ManageCatalog` (Admin/Manager) | `ProductReviewResponse` |
+| DELETE | `/api/product-reviews/{reviewId}` | - | Người tạo đánh giá hoặc Admin/Manager | `204` |
+
+Khi `includePending=false` (mặc định), frontend cửa hàng chỉ nên hiển thị các
+đánh giá đã được duyệt.
+
+## 6. Báo cáo - `/api/reports`
+
+Các endpoint báo cáo yêu cầu policy `ManageOperations` (Admin, Manager hoặc
+Staff).
+
+### Doanh thu - `GET /api/reports/revenue`
+
+Query: `fromDate`, `toDate` dạng `YYYY-MM-DD` và `groupBy` là `day` hoặc
+`month`.
+
+```json
+{
+  "groupBy": "day",
+  "fromDate": "2026-10-01",
+  "toDate": "2026-10-29",
+  "totalRevenue": 12500000,
+  "paidOrderCount": 85,
+  "periods": [
+    {
+      "period": "2026-10-29",
+      "revenue": 500000,
+      "paidOrderCount": 4
+    }
+  ]
+}
+```
+
+### Sản phẩm bán chạy - `GET /api/reports/top-selling-products`
+
+Query: `fromDate`, `toDate`, `limit` (từ `1` đến `100`, mặc định `10`).
+
+```json
+[
+  {
+    "productId": "00000000-0000-0000-0000-000000000020",
+    "productCode": "RAU-001",
+    "productName": "Cải xanh",
+    "quantitySold": 120,
+    "revenue": 3000000
+  }
+]
+```
+
+### Báo cáo tồn kho - `GET /api/reports/inventory`
+
+Query: `warehouseId`, `lowStockOnly` (mặc định `false`). Response là một
+array `InventoryReportItemResponse`, mỗi item gồm:
+`productId`, `productCode`, `productName`, `warehouseId`, `warehouseName`,
+`quantity`, `reservedQuantity`, `availableQuantity`, `minStockAlert`,
+`isLowStock`.
+
+## 7. Quản trị user và role
 
 ### User - `/api/users`
 
@@ -375,7 +566,7 @@ Customer có `id`, `fullName`, `phone`, `email`, `gender`, `dateOfBirth`,
 `RoleResponse` gồm `id`, `name`, `description`, `createdAt`, `userCount`,
 `isSystemRole`. Role hệ thống không nên cho phép frontend hiển thị nút sửa/xóa.
 
-## 7. Mapping màn hình frontend đề xuất
+## 8. Mapping màn hình frontend đề xuất
 
 | Màn hình | API chính | Dữ liệu cần hiển thị |
 | --- | --- | --- |
@@ -386,10 +577,13 @@ Customer có `id`, `fullName`, `phone`, `email`, `gender`, `dateOfBirth`,
 | Nhập hàng | `/api/purchase-orders`, `/api/suppliers` | nhà cung cấp, chi tiết nhập, đã nhận |
 | Bán hàng POS | `/api/orders/pos`, `/api/customers`, `/api/products` | giỏ hàng, khách, tổng tiền, thanh toán |
 | Đơn online | `/api/orders/online`, `/api/customers/{id}/addresses` | địa chỉ, vận chuyển, trạng thái |
+| Thanh toán/giao hàng | `/api/orders/{id}/payment`, `/api/orders/{id}/delivery` | phương thức, trạng thái, mã vận đơn |
+| Đánh giá sản phẩm | `/api/products/{id}/reviews`, `/api/product-reviews/{id}/approval` | sao, bình luận, duyệt |
+| Dashboard/báo cáo | `/api/reports/*` | doanh thu, đơn đã trả, bán chạy, tồn kho |
 | Khách hàng | `/api/customers` | điểm tích lũy, địa chỉ, lịch sử đơn |
 | Quản trị tài khoản | `/api/users`, `/api/roles` | role, trạng thái, phân quyền |
 
-## 8. Lưu ý khi triển khai frontend
+## 9. Lưu ý khi triển khai frontend
 
 1. Không hard-code `id` của sản phẩm, kho, danh mục hoặc khách hàng; luôn lấy
    từ API và lưu UUID.
@@ -400,8 +594,8 @@ Customer có `id`, `fullName`, `phone`, `email`, `gender`, `dateOfBirth`,
    nhật cache thay vì tự dựng lại object.
 4. Sau `DELETE` hoặc response `204`, cập nhật danh sách cục bộ và không cố đọc
    JSON body.
-5. Hiện một số attribute `[Authorize]` trong controller đang được comment để
-   phục vụ phát triển. Khi backend bật lại authorization, frontend vẫn phải
+5. Backend hiện đã bật authorization cho customer management, payment,
+   delivery, reports và product reviews theo từng policy/role. Frontend phải
    gửi `Authorization: Bearer <accessToken>` và ẩn các chức năng theo role.
 6. Swagger tại `/swagger` là nguồn kiểm tra cuối cùng khi backend thay đổi
    DTO hoặc status code.

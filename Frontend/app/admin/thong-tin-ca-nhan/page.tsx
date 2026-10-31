@@ -1,0 +1,32 @@
+"use client";
+
+import { useState } from "react";
+import { useAuth } from "../../../providers/auth-provider";
+import { updateUser } from "../../../services/users/user.service";
+import { getAuthError } from "../../../components/auth/auth-error";
+import { PageHeader, Panel, StatusBadge } from "../../../components/admin/admin-ui";
+
+export default function AdminProfilePage() {
+  const { session, updateSession, changePassword } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({ fullName: session?.fullName ?? "", email: session?.email ?? "", phoneNumber: "" });
+  const [password, setPassword] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [message, setMessage] = useState(""); const [error, setError] = useState("");
+  if (!session) return null;
+  const saveProfile = async (event: React.FormEvent) => {
+    event.preventDefault(); setMessage(""); setError("");
+    try {
+      const updated = await updateUser(session.userId, { fullName: form.fullName, email: form.email, phoneNumber: form.phoneNumber || undefined, roles: session.roles });
+      updateSession({ fullName: updated.fullName, email: updated.email ?? form.email });
+      setEditing(false); setMessage("Đã cập nhật thông tin cá nhân.");
+    } catch (submitError) { setError(getAuthError(submitError, "Không thể cập nhật thông tin cá nhân.")); }
+  };
+  const savePassword = async (event: React.FormEvent) => {
+    event.preventDefault(); setMessage(""); setError("");
+    if (password.newPassword.length < 8) { setError("Mật khẩu mới cần ít nhất 8 ký tự."); return; }
+    if (password.newPassword !== password.confirmPassword) { setError("Mật khẩu xác nhận chưa trùng khớp."); return; }
+    try { await changePassword(password.currentPassword, password.newPassword); setPassword({ currentPassword: "", newPassword: "", confirmPassword: "" }); setMessage("Đổi mật khẩu thành công."); }
+    catch (submitError) { setError(getAuthError(submitError, "Không thể đổi mật khẩu. Vui lòng kiểm tra mật khẩu hiện tại.")); }
+  };
+  return <><PageHeader eyebrow="HỆ THỐNG　›　TÀI KHOẢN CÁ NHÂN" title="Thông tin cá nhân" description="Quản lý thông tin hiển thị và bảo mật tài khoản quản trị." /><div className="grid gap-5 lg:grid-cols-[1fr_380px]">{(message || error) && <div className={`lg:col-span-2 rounded-xl p-3 text-xs ${error ? "bg-red-50 text-red-700" : "bg-[#d1fae5] text-[#065f46]"}`}>{error || message}</div>}<Panel title="Hồ sơ tài khoản"><div className="flex items-center gap-4 rounded-xl bg-[#f1f6ee] p-4"><div className="grid h-16 w-16 place-items-center rounded-full bg-[#f8caa4] text-lg font-black text-[#7b3d24]">{session.fullName.split(/\s+/).slice(-2).map((part) => part[0]).join("")}</div><div><h2 className="font-bold">{session.fullName}</h2><p className="text-xs text-[#66736a]">{session.email}</p><div className="mt-2 flex gap-2">{session.roles.map((role) => <StatusBadge tone="blue" key={role}>{role}</StatusBadge>)}</div></div></div><div className="mt-5 grid gap-4 text-xs"><div><small className="text-[#66736a]">HỌ VÀ TÊN</small><p className="mt-1 font-bold">{session.fullName}</p></div><div><small className="text-[#66736a]">EMAIL ĐĂNG NHẬP</small><p className="mt-1 font-bold">{session.email}</p></div><div><small className="text-[#66736a]">MÃ TÀI KHOẢN</small><p className="mt-1 font-mono text-[#66736a]">{session.userId}</p></div><div><small className="text-[#66736a]">KHO PHỤ TRÁCH</small><p className="mt-1 font-bold">{session.roles.includes("Admin") ? "Toàn hệ thống" : "Kho Tổng Đà Lạt (CN Q3)"}</p></div></div><button onClick={() => setEditing(true)} className="mt-6 rounded-lg bg-[#006948] px-4 py-3 text-xs font-bold text-white">✎ Sửa thông tin</button></Panel><Panel title="Đổi mật khẩu cá nhân"><p className="mb-4 text-xs text-[#66736a]">Nên sử dụng mật khẩu có ít nhất 8 ký tự và không trùng với mật khẩu cũ.</p><form className="space-y-3 text-xs" onSubmit={savePassword}><label className="block font-bold">Mật khẩu hiện tại<input required type="password" className="mt-1 block w-full rounded-lg border p-3 font-normal" value={password.currentPassword} onChange={(event) => setPassword({ ...password, currentPassword: event.target.value })} /></label><label className="block font-bold">Mật khẩu mới<input required type="password" minLength={8} className="mt-1 block w-full rounded-lg border p-3 font-normal" value={password.newPassword} onChange={(event) => setPassword({ ...password, newPassword: event.target.value })} /></label><label className="block font-bold">Xác nhận mật khẩu mới<input required type="password" className="mt-1 block w-full rounded-lg border p-3 font-normal" value={password.confirmPassword} onChange={(event) => setPassword({ ...password, confirmPassword: event.target.value })} /></label><button className="w-full rounded-lg border border-[#006948] py-3 font-bold text-[#006948]">Cập nhật mật khẩu</button></form></Panel></div>{editing && <div className="fixed inset-0 z-50 grid place-items-center bg-[#18302266] p-4" role="dialog" aria-modal="true"><form onSubmit={saveProfile} className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl"><div className="flex items-start justify-between"><div><h2 className="text-xl font-bold">Sửa thông tin cá nhân</h2><p className="mt-1 text-xs text-[#66736a]">Cập nhật thông tin hiển thị của tài khoản.</p></div><button type="button" onClick={() => setEditing(false)} className="text-xl text-[#66736a]">×</button></div><div className="mt-5 grid gap-4 text-xs"><label className="font-bold">Họ và tên<input required className="mt-1 block w-full rounded-lg border p-3 font-normal" value={form.fullName} onChange={(event) => setForm({ ...form, fullName: event.target.value })} /></label><label className="font-bold">Email<input required type="email" className="mt-1 block w-full rounded-lg border p-3 font-normal" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label className="font-bold">Số điện thoại<input className="mt-1 block w-full rounded-lg border p-3 font-normal" value={form.phoneNumber} onChange={(event) => setForm({ ...form, phoneNumber: event.target.value })} /></label></div><div className="mt-6 flex justify-end gap-2"><button type="button" onClick={() => setEditing(false)} className="rounded-lg border px-4 py-2 text-xs">Hủy</button><button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">Lưu thay đổi</button></div></form></div>}</>;
+}

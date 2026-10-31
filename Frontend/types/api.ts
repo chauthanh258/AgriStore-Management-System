@@ -22,6 +22,15 @@ export interface ProductImage {
   sortOrder: number;
 }
 
+export interface CategoryRequest {
+  name: string;
+  description?: string;
+  parentId?: string | null;
+  image?: string;
+  isActive: boolean;
+  sortOrder: number;
+}
+
 export interface Product {
   id: string;
   code: string;
@@ -42,6 +51,47 @@ export interface Product {
   updatedAt: string | null;
   mainImageUrl: string;
   images?: ProductImage[];
+}
+
+export interface Unit {
+  id: string;
+  name: string;
+  abbreviation?: string | null;
+  isActive: boolean;
+}
+
+export interface ProductRequest {
+  code: string;
+  name: string;
+  categoryId: string;
+  unitId: string;
+  description?: string;
+  shortDescription?: string;
+  costPrice: number;
+  sellingPrice: number;
+  minStockAlert: number;
+  expiryDays?: number;
+  isActive: boolean;
+  isFeatured: boolean;
+}
+
+export interface ProductReview {
+  id: string;
+  productId: string;
+  customerName: string;
+  rating: number;
+  comment: string | null;
+  isApproved: boolean;
+  createdAt: string;
+}
+
+export interface CreateProductReviewRequest {
+  rating: number;
+  comment?: string;
+}
+
+export interface SetProductReviewApprovalRequest {
+  isApproved: boolean;
 }
 
 export interface Category {
@@ -135,4 +185,44 @@ export interface AuthResponse {
   email: string;
   fullName: string;
   roles: string[];
+}
+
+export interface RegisterRequest {
+  fullName: string;
+  email: string;
+  phoneNumber: string;
+  password: string;
+}
+
+export interface RegisterResponse {
+  userId: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+}
+
+export interface UserResponse {
+  id: string;
+  userName: string | null;
+  email: string | null;
+  fullName: string;
+  phoneNumber: string | null;
+  avatar: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string | null;
+  roles: string[];
+}
+
+export interface UpdateUserRequest {
+  fullName: string;
+  email: string;
+  phoneNumber?: string;
+  avatar?: string;
+  roles?: string[];
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
 }
