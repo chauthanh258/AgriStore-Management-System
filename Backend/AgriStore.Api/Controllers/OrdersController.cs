@@ -75,6 +75,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPost("online")]
+    [Authorize(Roles = SystemRoles.Customer)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<OrderResponse>> CreateOnline(

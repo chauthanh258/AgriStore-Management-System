@@ -3,26 +3,29 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
-  categories as mockCategories,
-  products as mockProducts
+  categories as mockCategories
 } from "../../../data/mock";
 import { categoryRepository } from "../../../services/categories/category.repository";
 import { productRepository } from "../../../services/products/product.repository";
-import { getUnits } from "../../../services/units/unit.service";
+import { unitRepository } from "../../../services/units/unit.service";
 import type {
   Category,
   CategoryRequest,
   Product,
   ProductImage,
   ProductRequest,
-  Unit
+  Unit,
+  UnitRequest
 } from "../../../types/api";
 import { formatCurrency } from "../../../lib/formatters";
 import {
   DataTable,
+  AdminModal,
+  IconButton,
   PageHeader,
   StatusBadge
 } from "../../../components/admin/admin-ui";
+import Image from "next/image";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 const emptyProduct: ProductRequest = {
@@ -64,7 +67,7 @@ function categoryName(id: string, all: Category[]) {
 }
 
 export default function ProductsAdminPage() {
-  const [tab, setTab] = useState<"categories" | "products">("products");
+  const [tab, setTab] = useState<"categories" | "products" | "units">("products");
   const [categories, setCategories] = useState<Category[]>(mockCategories);
   const [products, setProducts] = useState<Product[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -74,6 +77,13 @@ export default function ProductsAdminPage() {
   const [loading, setLoading] = useState(true);
   const [productModal, setProductModal] = useState(false);
   const [categoryModal, setCategoryModal] = useState(false);
+  const [unitModal, setUnitModal] = useState(false);
+  const [editingUnit, setEditingUnit] = useState<Unit | null>(null);
+  const [unitForm, setUnitForm] = useState<UnitRequest>({
+    name: "",
+    symbol: "",
+    description: ""
+  });
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [productForm, setProductForm] = useState<ProductRequest>(emptyProduct);
@@ -116,20 +126,11 @@ export default function ProductsAdminPage() {
       void loadProducts();
       void loadCategories();
       if (!useMock)
-        void getUnits()
+        void unitRepository.getUnits()
           .then((result) => setUnits(result.items))
           .catch((loadError) => setError(errorMessage(loadError)));
       else
-        setUnits(
-          Array.from(
-            new Map(
-              mockProducts.map((item) => [
-                item.unitId,
-                { id: item.unitId, name: item.unitName, isActive: true }
-              ])
-            ).values()
-          )
-        );
+        void unitRepository.getUnits().then((result) => setUnits(result.items));
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadProducts, loadCategories]);
@@ -191,6 +192,41 @@ export default function ProductsAdminPage() {
     setCategoryForm({ ...emptyCategory, sortOrder: categories.length + 1 });
     setError("");
     setCategoryModal(true);
+  }
+  function openCreateUnit() {
+    setEditingUnit(null);
+    setUnitForm({ name: "", symbol: "", description: "" });
+    setError("");
+    setUnitModal(true);
+  }
+  function openEditUnit(unit: Unit) {
+    setEditingUnit(unit);
+    setUnitForm({
+      name: unit.name,
+      symbol: unit.symbol ?? unit.abbreviation ?? "",
+      description: ""
+    });
+    setError("");
+    setUnitModal(true);
+  }
+  async function submitUnit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!unitForm.name.trim() || !unitForm.symbol.trim()) {
+      setError("Vui lòng nhập tên và ký hiệu đơn vị.");
+      return;
+    }
+    setSubmitting(true);
+    setError("");
+    try {
+      if (editingUnit) await unitRepository.updateUnit(editingUnit.id, unitForm);
+      else await unitRepository.createUnit(unitForm);
+      setUnitModal(false);
+      setUnits((await unitRepository.getUnits()).items);
+    } catch (submitError) {
+      setError(errorMessage(submitError));
+    } finally {
+      setSubmitting(false);
+    }
   }
   function openEditCategory(category: Category) {
     setEditingCategory(category);
@@ -345,11 +381,15 @@ export default function ProductsAdminPage() {
         action={
           <button
             onClick={
-              tab === "products" ? openCreateProduct : openCreateCategory
+              tab === "products"
+                ? openCreateProduct
+                : tab === "categories"
+                  ? openCreateCategory
+                  : openCreateUnit
             }
             className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white"
           >
-            ＋ Thêm {tab === "products" ? "sản phẩm" : "danh mục"}
+            ＋ Thêm {tab === "products" ? "sản phẩm" : tab === "categories" ? "danh mục" : "đơn vị"}
           </button>
         }
       />
@@ -371,12 +411,18 @@ export default function ProductsAdminPage() {
         >
           Danh mục
         </button>
+        <button
+          onClick={() => setTab("units")}
+          className={`px-4 py-3 text-sm font-bold ${tab === "units" ? "border-b-2 border-[#006948] text-[#006948]" : "text-gray-500"}`}
+        >
+          Đơn vị
+        </button>
       </div>
       {tab === "products" ? (
         <>
           <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-[#dfe8dd] bg-white p-3">
             <input
-              className="min-w-[220px] flex-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs"
+              className="min-w-55 flex-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs"
               placeholder="Tìm theo tên hoặc mã SKU..."
               value={query}
               onChange={(event) => {
@@ -422,7 +468,7 @@ export default function ProductsAdminPage() {
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         {product.mainImageUrl && (
-                          <img
+                          <Image
                             src={product.mainImageUrl}
                             alt=""
                             className="h-10 w-10 rounded object-cover"
@@ -447,14 +493,15 @@ export default function ProductsAdminPage() {
                       </StatusBadge>
                     </td>
                     <td className="px-3 py-3">
-                      <button
-                        className="mr-2 text-[#006948] hover:underline"
+                      <IconButton
+                        label={`Sửa ${product.name}`}
                         onClick={() => void openEditProduct(product)}
                       >
-                        Sửa
-                      </button>{" "}
-                      <button
-                        className="text-red-600 hover:underline"
+                        ✎
+                      </IconButton>{" "}
+                      <IconButton
+                        label={`Xóa ${product.name}`}
+                        tone="danger"
                         onClick={() => {
                           if (window.confirm(`Xóa sản phẩm "${product.name}"?`))
                             void productRepository
@@ -465,8 +512,8 @@ export default function ProductsAdminPage() {
                               );
                         }}
                       >
-                        Xóa
-                      </button>
+                        🗑
+                      </IconButton>
                     </td>
                   </tr>
                 ))
@@ -474,7 +521,7 @@ export default function ProductsAdminPage() {
             </DataTable>
           </div>
         </>
-      ) : (
+      ) : tab === "categories" ? (
         <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
           {" "}
           <DataTable
@@ -508,27 +555,49 @@ export default function ProductsAdminPage() {
                     </StatusBadge>
                   </td>
                   <td className="px-3 py-3">
-                    <button
-                      className="mr-2 text-[#006948] hover:underline"
+                    <IconButton
+                      label={`Sửa ${category.name}`}
                       onClick={() => openEditCategory(category)}
                     >
-                      Sửa
-                    </button>
-                    <button
-                      className="mr-2 text-amber-700 hover:underline"
+                      ✎
+                    </IconButton>
+                    <IconButton
+                      label={`${category.isActive ? "Tắt" : "Bật"} ${category.name}`}
                       onClick={() => void toggleCategory(category)}
                     >
-                      {category.isActive ? "Tắt" : "Bật"}
-                    </button>
-                    <button
-                      className="text-red-600 hover:underline"
+                      {category.isActive ? "⏸" : "▶"}
+                    </IconButton>
+                    <IconButton
+                      label={`Xóa ${category.name}`}
+                      tone="danger"
                       onClick={() => void removeCategory(category)}
                     >
-                      Xóa
-                    </button>
+                      🗑
+                    </IconButton>
                   </td>
                 </tr>
               ))}
+          </DataTable>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
+          <DataTable headers={["Tên đơn vị", "Ký hiệu", "Trạng thái", "Thao tác"]}>
+            {units.map((unit) => (
+              <tr className="hover:bg-[#f8fbf7]" key={unit.id}>
+                <td className="px-3 py-3 font-semibold">{unit.name}</td>
+                <td className="px-3 py-3">{unit.symbol ?? unit.abbreviation ?? "—"}</td>
+                <td className="px-3 py-3"><StatusBadge>Đang hoạt động</StatusBadge></td>
+                <td className="space-x-2 px-3 py-3">
+                  <IconButton label={`Sửa ${unit.name}`} onClick={() => openEditUnit(unit)}>✎</IconButton>
+                  <IconButton label={`Xóa ${unit.name}`} tone="danger" onClick={() => {
+                    if (!window.confirm(`Xóa đơn vị "${unit.name}"?`)) return;
+                    void unitRepository.deleteUnit(unit.id)
+                      .then(async () => setUnits((await unitRepository.getUnits()).items))
+                      .catch((actionError) => setError(errorMessage(actionError)));
+                  }}>🗑</IconButton>
+                </td>
+              </tr>
+            ))}
           </DataTable>
         </div>
       )}
@@ -568,7 +637,7 @@ export default function ProductsAdminPage() {
                 <div className="grid grid-cols-2 gap-2">
                   {images.map((image) => (
                     <div key={image.id} className="relative mb-2">
-                      <img
+                      <Image
                         src={image.imageUrl}
                         alt=""
                         className={`aspect-square w-full rounded-lg object-cover ${image.isMain ? "ring-2 ring-[#006948]" : ""}`}
@@ -591,7 +660,7 @@ export default function ProductsAdminPage() {
                   ))}
                   {newImages.map((file, index) => (
                     <div key={`${file.name}-${index}`} className="relative mb-2">
-                      <img
+                      <Image
                         src={URL.createObjectURL(file)}
                         alt=""
                         className={`aspect-square w-full rounded-lg object-cover opacity-70 ${newMainIndex === index ? "ring-2 ring-[#006948]" : ""}`}
@@ -944,6 +1013,25 @@ export default function ProductsAdminPage() {
             </div>
           </form>
         </div>
+      )}
+      {unitModal && (
+        <AdminModal
+          title={editingUnit ? "Sửa đơn vị" : "Thêm đơn vị"}
+          description="Đơn vị được dùng trong sản phẩm và bán hàng tại quầy."
+          onClose={() => setUnitModal(false)}
+          footer={
+            <>
+              <button type="button" className="rounded-lg border px-4 py-2 text-xs" onClick={() => setUnitModal(false)}>Hủy</button>
+              <button form="unit-form" disabled={submitting} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{submitting ? "Đang lưu..." : "Lưu đơn vị"}</button>
+            </>
+          }
+        >
+          <form id="unit-form" className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => void submitUnit(event)}>
+            <label className="text-xs">Tên đơn vị<input required className="mt-1 w-full rounded-lg border p-3" value={unitForm.name} onChange={(event) => setUnitForm({ ...unitForm, name: event.target.value })} /></label>
+            <label className="text-xs">Ký hiệu<input required className="mt-1 w-full rounded-lg border p-3" value={unitForm.symbol} onChange={(event) => setUnitForm({ ...unitForm, symbol: event.target.value })} /></label>
+            <label className="text-xs sm:col-span-2">Mô tả<textarea className="mt-1 w-full rounded-lg border p-3" rows={3} value={unitForm.description} onChange={(event) => setUnitForm({ ...unitForm, description: event.target.value })} /></label>
+          </form>
+        </AdminModal>
       )}
     </>
   );

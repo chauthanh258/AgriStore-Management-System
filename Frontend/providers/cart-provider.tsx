@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Product } from "../types/api";
 
 type Cart = Record<string, number>;
@@ -26,7 +26,13 @@ function readCart(): Cart {
 }
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<Cart>(readCart);
+  const [cart, setCart] = useState<Cart>({});
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setCart(readCart()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const updateState = (next: Cart) => {
     setCart(next);
     window.localStorage.setItem(storageKey, JSON.stringify(next));

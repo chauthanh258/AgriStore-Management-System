@@ -58,9 +58,6 @@ export function ResourcePage({
           <option>Đang hoạt động</option>
           <option>Đang chờ</option>
         </select>
-        <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">
-          ＋ Tạo mới
-        </button>
       </div>
       <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
         <div className="mb-3 flex justify-between text-xs text-[#66736a]">

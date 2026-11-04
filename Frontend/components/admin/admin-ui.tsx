@@ -1,6 +1,81 @@
 import type { ReactNode } from "react";
 import { formatCurrency } from "../../lib/formatters";
 
+export function IconButton({
+  label,
+  children,
+  tone = "default",
+  onClick,
+  type = "button"
+}: {
+  label: string;
+  children: ReactNode;
+  tone?: "default" | "danger";
+  onClick?: () => void;
+  type?: "button" | "submit";
+}) {
+  return (
+    <button
+      aria-label={label}
+      title={label}
+      type={type}
+      onClick={onClick}
+      className={`rounded-lg border px-2.5 py-1.5 text-xs transition focus:outline-none focus:ring-2 focus:ring-[#9bd2b9] ${
+        tone === "danger"
+          ? "border-red-100 text-red-600 hover:bg-red-50"
+          : "border-[#dfe8dd] text-[#006948] hover:bg-[#eff7ed]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function AdminModal({
+  title,
+  description,
+  children,
+  onClose,
+  footer
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  onClose: () => void;
+  footer?: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#102219]/45 p-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="admin-modal-title"
+        className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-[#dfe8dd] bg-white shadow-2xl"
+      >
+        <div className="flex items-start justify-between gap-4 border-b border-[#e7eee4] p-5">
+          <div>
+            <h2 id="admin-modal-title" className="text-lg font-bold">
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-1 text-xs text-[#66736a]">{description}</p>
+            )}
+          </div>
+          <IconButton label="Đóng cửa sổ" onClick={onClose}>
+            ×
+          </IconButton>
+        </div>
+        <div className="p-5">{children}</div>
+        {footer && (
+          <div className="flex justify-end gap-2 border-t border-[#e7eee4] p-5">
+            {footer}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function PageHeader({
   eyebrow,
   title,

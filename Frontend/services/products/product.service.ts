@@ -28,6 +28,11 @@ export async function updateProduct(id: string, request: ProductRequest) {
   return response.data;
 }
 
+export async function setProductStatus(id: string, isActive: boolean) {
+  const response = await apiClient.patch<Product>(`/api/products/${id}/status`, { isActive });
+  return response.data;
+}
+
 export async function deleteProduct(id: string) {
   await apiClient.delete(`/api/products/${id}`);
 }

@@ -1,5 +1,35 @@
 import { categories, customer, orders, products } from "../data/mock";
-import type { Category, CategoryRequest, CreateOnlineOrderRequest, Order, PaginatedResponse, Product, ProductImage, ProductQuery, ProductRequest } from "../types/api";
+import type { Category, CategoryRequest, CreateOnlineOrderRequest, Order, PaginatedResponse, Product, ProductImage, ProductQuery, ProductRequest, Unit, UnitRequest } from "../types/api";
+
+export const units: Unit[] = [
+  { id: "unit-kg", name: "Kilogram", symbol: "kg", isActive: true },
+  { id: "unit-box", name: "Hộp", symbol: "hộp", isActive: true },
+  { id: "unit-bundle", name: "Bó", symbol: "bó", isActive: true },
+  { id: "unit-bag", name: "Túi", symbol: "túi", isActive: true }
+];
+
+export async function mockUnits(): Promise<PaginatedResponse<Unit>> {
+  return { items: units.filter((unit) => unit.isActive), page: 1, pageSize: 100, totalCount: units.length, totalPages: 1 };
+}
+
+export async function mockCreateUnit(request: UnitRequest) {
+  const unit: Unit = { id: `unit-${Date.now()}`, ...request, isActive: true };
+  units.push(unit);
+  return unit;
+}
+
+export async function mockUpdateUnit(id: string, request: UnitRequest) {
+  const index = units.findIndex((unit) => unit.id === id);
+  if (index < 0) throw new Error("Không tìm thấy đơn vị.");
+  units[index] = { ...units[index], ...request };
+  return units[index];
+}
+
+export async function mockDeleteUnit(id: string) {
+  const unit = units.find((item) => item.id === id);
+  if (!unit) throw new Error("Không tìm thấy đơn vị.");
+  unit.isActive = false;
+}
 
 export async function mockProducts(params: ProductQuery = {}): Promise<PaginatedResponse<Product>> {
   await new Promise((resolve) => setTimeout(resolve, 180));

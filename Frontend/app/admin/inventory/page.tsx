@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import {
   KpiGrid,
   PageHeader,
@@ -6,9 +7,22 @@ import {
   StatusBadge
 } from "../../../components/admin/admin-ui";
 import { inventory } from "../../../data/admin-mock";
+import { getInventories } from "../../../services/inventory/inventory.service";
+import type { InventoryItem } from "../../../types/api";
+
+const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 export default function InventoryPage() {
+  const [items, setItems] = useState<InventoryItem[]>(inventory);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (useMock) return;
+    getInventories({ page: 1, pageSize: 100 })
+      .then((result) => setItems(result.items))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Không thể tải tồn kho."));
+  }, []);
   return (
     <>
+      {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
       <PageHeader
         eyebrow="QUẢN LÝ CHUỖI CUNG ỨNG　›　KHO & KIỂM KÊ TỒN"
         title="Kiểm Kê & Quản Trị Tồn Kho Nông Sản"
@@ -58,7 +72,7 @@ export default function InventoryPage() {
             />
           </div>
           <div className="divide-y divide-[#e7eee4]">
-            {inventory.map((item) => (
+            {items.map((item) => (
               <div
                 className={`grid grid-cols-[1fr_auto_auto] gap-3 p-4 text-xs ${item.isLowStock ? "bg-[#fffdf5]" : ""}`}
                 key={item.productId}
@@ -86,7 +100,7 @@ export default function InventoryPage() {
           <p className="rounded bg-[#fee2e2] p-3 text-xs text-red-700">
             4 mặt hàng có nguy cơ sốc nhiệt/date ngắn
           </p>
-          {inventory
+          {items
             .filter((item) => item.isLowStock)
             .map((item) => (
               <div
