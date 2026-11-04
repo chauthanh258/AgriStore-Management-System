@@ -86,6 +86,17 @@ public sealed class CustomerService(ApplicationDbContext dbContext) : ICustomerS
         return MapCustomer(customer, addresses);
     }
 
+    public Task<Guid?> GetIdByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        return dbContext.Customers
+            .AsNoTracking()
+            .Where(customer => customer.UserId == userId)
+            .Select(customer => (Guid?)customer.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+    }
+
     public async Task<CustomerResponse> CreateAsync(
         CreateCustomerRequest request,
         CancellationToken cancellationToken)

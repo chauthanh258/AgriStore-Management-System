@@ -1,5 +1,13 @@
 import apiClient from "../../lib/axios/client";
-import type { AuthResponse, ChangePasswordRequest, RegisterRequest, RegisterResponse } from "../../types/api";
+import type {
+  AuthResponse,
+  ChangePasswordRequest,
+  ForgotPasswordRequest,
+  PasswordResetResponse,
+  RegisterRequest,
+  RegisterResponse,
+  ResetPasswordRequest
+} from "../../types/api";
 
 export async function login(email: string, password: string) {
   const response = await apiClient.post<AuthResponse>("/api/auth/login", { email, password });
@@ -35,5 +43,15 @@ export async function refreshSession() {
 }
 
 export async function changePassword(request: ChangePasswordRequest) {
-  await apiClient.post("/api/auth/change-password", request);
+  await apiClient.post<PasswordResetResponse>("/api/auth/change-password", request);
+}
+
+export async function forgotPassword(request: ForgotPasswordRequest) {
+  const response = await apiClient.post<PasswordResetResponse>("/api/auth/forgot-password", request);
+  return response.data;
+}
+
+export async function resetPassword(request: ResetPasswordRequest) {
+  const response = await apiClient.post<PasswordResetResponse>("/api/auth/reset-password", request);
+  return response.data;
 }

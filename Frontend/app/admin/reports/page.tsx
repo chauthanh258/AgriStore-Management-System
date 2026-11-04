@@ -1,3 +1,5 @@
+"use client";
+import { useEffect, useState } from "react";
 import {
   KpiGrid,
   PageHeader,
@@ -8,9 +10,32 @@ import { RevenueChart } from "../../../components/admin/revenue-chart";
 import { revenueReport } from "../../../data/admin-mock";
 import { products } from "../../../data/mock";
 import { formatCurrency } from "../../../lib/formatters";
+import { getRevenueReport, getTopSellingProducts } from "../../../services/reports/report.service";
+import type { RevenueReport as ApiRevenueReport, TopSellingProduct } from "../../../types/api";
+
+const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 export default function ReportsPage() {
+  const [report, setReport] = useState<ApiRevenueReport | null>(null);
+  const [topProducts, setTopProducts] = useState<TopSellingProduct[]>([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (useMock) return;
+    Promise.all([
+      getRevenueReport({ fromDate: "2026-10-01", toDate: "2026-10-29", groupBy: "day" }),
+      getTopSellingProducts({ fromDate: "2026-10-01", toDate: "2026-10-29", limit: 5 })
+    ])
+      .then(([revenue, top]) => {
+        setReport(revenue);
+        setTopProducts(top);
+      })
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Không thể tải báo cáo."));
+  }, []);
+
+  const currentReport = report ?? revenueReport;
   return (
     <>
+      {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
       <PageHeader
         eyebrow="HỆ THỐNG & BÁO CÁO　›　DOANH THU"
         title="Báo Cáo Hoạt Động & Phân Tích Doanh Thu"
@@ -25,7 +50,7 @@ export default function ReportsPage() {
         items={[
           {
             label: "Tổng doanh thu tháng",
-            value: revenueReport.totalRevenue,
+            value: currentReport.totalRevenue,
             hint: "+18.6% so với tháng trước"
           },
           {
@@ -36,7 +61,7 @@ export default function ReportsPage() {
           },
           {
             label: "Tổng đơn hàng thành công",
-            value: revenueReport.paidOrderCount,
+            value: currentReport.paidOrderCount,
             hint: "Hủy/đổi dưới 1%",
             tone: "blue"
           },
@@ -80,12 +105,17 @@ export default function ReportsPage() {
         </Panel>
         <Panel title="Top sản phẩm bán chạy">
           <DataTable headers={["Sản phẩm", "Số lượng", "Doanh thu"]}>
-            {products.slice(0, 5).map((product, index) => (
-              <tr key={product.id}>
-                <td className="px-3 py-3">{product.name}</td>
-                <td className="px-3 py-3">{284 - index * 36}</td>
+            {(topProducts.length ? topProducts : products.slice(0, 5).map((product, index) => ({
+              productId: product.id,
+              productName: product.name,
+              quantitySold: 284 - index * 36,
+              revenue: product.sellingPrice * (284 - index * 36)
+            }))).map((product) => (
+              <tr key={product.productId}>
+                <td className="px-3 py-3">{product.productName}</td>
+                <td className="px-3 py-3">{product.quantitySold}</td>
                 <td className="px-3 py-3">
-                  {formatCurrency(product.sellingPrice * (284 - index * 36))}
+                  {formatCurrency(product.revenue)}
                 </td>
               </tr>
             ))}

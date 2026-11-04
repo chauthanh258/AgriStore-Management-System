@@ -14,6 +14,11 @@ public interface ICustomerService
         CancellationToken cancellationToken
     );
 
+    Task<Guid?> GetIdByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken
+    );
+
     Task<CustomerResponse> CreateAsync(
         CreateCustomerRequest request,
         CancellationToken cancellationToken

@@ -13,6 +13,11 @@ export async function createCategory(request: CategoryRequest) {
   return response.data;
 }
 
+export async function getCategoryById(id: string) {
+  const response = await apiClient.get<Category>(`/api/categories/${id}`);
+  return response.data;
+}
+
 export async function updateCategory(id: string, request: CategoryRequest) {
   const response = await apiClient.put<Category>(`/api/categories/${id}`, request);
   return response.data;

@@ -113,16 +113,31 @@ public sealed class OrderService(
         Guid? createdByUserId,
         CancellationToken cancellationToken)
     {
-        if (request.CustomerId == Guid.Empty ||
-            request.ShippingAddressId == Guid.Empty ||
+        if (request.ShippingAddressId == Guid.Empty ||
             request.ShippingMethodId == Guid.Empty)
         {
             throw new ArgumentException(
                 "Đơn online phải có khách hàng, địa chỉ và phương thức giao hàng.");
         }
 
+        if (!createdByUserId.HasValue)
+        {
+            throw new ArgumentException("Đơn online yêu cầu tài khoản khách hàng.");
+        }
+
+        var customerId = await dbContext.Customers
+            .AsNoTracking()
+            .Where(customer => customer.UserId == createdByUserId.Value)
+            .Select(customer => (Guid?)customer.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!customerId.HasValue)
+        {
+            throw new ArgumentException("Tài khoản chưa có hồ sơ khách hàng.");
+        }
+
         return await CreateAsync(
-            request.CustomerId,
+            customerId.Value,
             request.WarehouseId,
             request.ShippingAddressId,
             request.ShippingMethodId,

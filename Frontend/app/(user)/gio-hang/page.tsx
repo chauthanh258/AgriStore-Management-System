@@ -2,26 +2,67 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { products } from "../../../data/mock";
+import { useEffect, useMemo, useState } from "react";
 import { formatCurrency } from "../../../lib/formatters";
 import { useCart } from "../../../providers/cart-provider";
+import { productRepository } from "../../../services/products/product.repository";
+import type { Product } from "../../../types/api";
 import { CartItem } from "../../../components/(user)/cart/cart-item";
 import { CartSummary } from "../../../components/(user)/cart/cart-summary";
 
 export default function CartPage() {
   const { cart, update, remove } = useCart();
   const router = useRouter();
-  const entries = Object.entries(cart)
-    .map(([id, quantity]) => ({
-      product: products.find((item) => item.id === id),
-      quantity
-    }))
-    .filter(
-      (
-        entry
-      ): entry is { product: (typeof products)[number]; quantity: number } =>
-        Boolean(entry.product)
-    );
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [productsError, setProductsError] = useState(false);
+
+  useEffect(() => {
+    const productIds = Object.keys(cart);
+    let active = true;
+
+    const timer = window.setTimeout(() => {
+      if (!productIds.length) {
+        setProducts([]);
+        setProductsError(false);
+        setLoadingProducts(false);
+        return;
+      }
+
+      setLoadingProducts(true);
+      setProductsError(false);
+      Promise.allSettled(productIds.map((id) => productRepository.getProductById(id)))
+        .then((results) => {
+          if (!active) return;
+          setProducts(
+            results
+              .filter(
+                (result): result is PromiseFulfilledResult<Product> =>
+                  result.status === "fulfilled"
+              )
+              .map((result) => result.value)
+          );
+          setProductsError(results.some((result) => result.status === "rejected"));
+        })
+        .finally(() => {
+          if (active) setLoadingProducts(false);
+        });
+    }, 0);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [cart]);
+
+  const entries = useMemo(
+    () =>
+      products.map((product) => ({
+        product,
+        quantity: cart[product.id] ?? 0
+      })),
+    [cart, products]
+  );
   const subtotal = entries.reduce(
     (total, entry) => total + entry.product.sellingPrice * entry.quantity,
     0
@@ -31,6 +72,11 @@ export default function CartPage() {
       <p className="mb-5 text-[11px] text-[var(--muted)]">
         Trang chủ　›　<b>Giỏ hàng & Thanh toán</b>
       </p>
+      <div className="mb-6 flex justify-center gap-8 rounded-lg bg-[#eaf4e7] p-4 text-xs sm:gap-12">
+        <b className="text-[var(--green)]">● 1. Giỏ hàng</b>
+        <span className="text-[var(--muted)]">2. Giao hàng & Thanh toán</span>
+        <span className="text-[var(--muted)]">3. Đặt hàng thành công</span>
+      </div>
       <div className="grid gap-5 lg:grid-cols-[1.6fr_.8fr]">
         <section>
           <div className="mb-4 rounded-lg bg-[#e5f7e9] p-4 text-[var(--green)]">
@@ -42,7 +88,15 @@ export default function CartPage() {
             <h2 className="mb-4 text-lg font-bold">
               ☑ Chọn tất cả ({entries.length} sản phẩm)
             </h2>
-            {entries.length ? (
+            {loadingProducts ? (
+              <div className="p-16 text-center text-[var(--muted)]">
+                Đang tải sản phẩm trong giỏ hàng...
+              </div>
+            ) : productsError && !entries.length ? (
+              <div className="p-16 text-center text-[var(--muted)]">
+                Không thể tải sản phẩm trong giỏ hàng. Vui lòng thử lại.
+              </div>
+            ) : entries.length ? (
               entries.map(({ product, quantity }) => (
                 <CartItem
                   key={product.id}

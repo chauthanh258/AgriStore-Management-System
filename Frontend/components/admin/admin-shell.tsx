@@ -34,8 +34,7 @@ const groups = [
     title: "HỆ THỐNG",
     links: [
       ["reports", "▥", "Báo cáo & Thống kê"],
-      ["staff", "♙", "Nhân viên & Phân quyền"],
-      ["settings", "⚙", "Cài đặt cửa hàng"]
+      ["staff", "♙", "Nhân viên & Phân quyền"]
     ]
   }
 ] as const;
