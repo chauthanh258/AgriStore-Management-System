@@ -36,12 +36,15 @@ public sealed class SupplierService(ApplicationDbContext dbContext) : ISupplierS
         }
 
         var totalCount = await suppliersQuery.CountAsync(cancellationToken);
-        var suppliers = await suppliersQuery
-            .OrderBy(supplier => supplier.Name)
-            .ThenBy(supplier => supplier.Code)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
+        var skip = ((long)page - 1) * pageSize;
+        var suppliers = skip > int.MaxValue
+            ? []
+            : await suppliersQuery
+                .OrderBy(supplier => supplier.Name)
+                .ThenBy(supplier => supplier.Code)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
 
         var items = suppliers.Select(MapSupplier).ToArray();
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);

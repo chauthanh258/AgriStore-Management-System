@@ -12,6 +12,15 @@ namespace AgriStore.Api.Controllers;
 [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrderService) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(PurchaseOrderListResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PurchaseOrderListResponse>> GetAll(
+        [FromQuery] PurchaseOrderListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await purchaseOrderService.GetPagedAsync(query, cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

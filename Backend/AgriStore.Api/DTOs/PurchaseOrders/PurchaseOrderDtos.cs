@@ -2,6 +2,28 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AgriStore.Api.DTOs.PurchaseOrders;
 
+public sealed record PurchaseOrderListQuery(
+    int Page = 1,
+    int PageSize = 20,
+    string? Status = null);
+
+public sealed record PurchaseOrderListItemResponse(
+    Guid Id,
+    string Code,
+    string SupplierName,
+    string WarehouseName,
+    DateTime OrderDate,
+    DateTime? ExpectedDate,
+    string Status,
+    decimal TotalAmount);
+
+public sealed record PurchaseOrderListResponse(
+    IReadOnlyCollection<PurchaseOrderListItemResponse> Items,
+    int Page,
+    int PageSize,
+    int TotalCount,
+    int TotalPages);
+
 public sealed record PurchaseOrderRequest
 {
     [Required]

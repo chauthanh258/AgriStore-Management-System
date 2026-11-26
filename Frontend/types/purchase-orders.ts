@@ -13,6 +13,25 @@ export interface PurchaseOrderRequest {
   details: PurchaseOrderLineRequest[];
 }
 
+export interface PurchaseOrderListItem {
+  id: string;
+  code: string;
+  supplierName: string;
+  warehouseName: string;
+  orderDate: string;
+  expectedDate?: string | null;
+  status: string;
+  totalAmount: number;
+}
+
+export interface PurchaseOrderListResponse {
+  items: PurchaseOrderListItem[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
 export interface PurchaseOrderDetail {
   id: string;
   productId: string;

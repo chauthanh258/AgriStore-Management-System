@@ -4,6 +4,9 @@ namespace AgriStore.Api.Services;
 
 public interface IPurchaseOrderService
 {
+    Task<PurchaseOrderListResponse> GetPagedAsync(
+        PurchaseOrderListQuery query,
+        CancellationToken cancellationToken);
     Task<PurchaseOrderResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> CreateAsync(
         PurchaseOrderRequest request,
