@@ -7,7 +7,15 @@ import type {
   ReceivePurchaseOrderRequest
 } from "../../types/purchase-orders";
 
-export async function getPurchaseOrders(params: { page?: number; pageSize?: number; status?: string } = {}) {
+export async function getPurchaseOrders(params: {
+  page?: number;
+  pageSize?: number;
+  status?: string;
+  search?: string;
+  supplierId?: string;
+  fromDate?: string;
+  toDate?: string;
+} = {}) {
   const response = await apiClient.get<PurchaseOrderListResponse>("/api/purchase-orders", { params });
   return response.data;
 }

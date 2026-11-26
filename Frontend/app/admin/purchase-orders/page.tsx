@@ -148,6 +148,10 @@ export default function PurchaseOrdersPage() {
   const [purchaseOrderWarehouses, setPurchaseOrderWarehouses] = useState<Warehouse[]>([]);
   const [supplierPage, setSupplierPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
+  const [searchFilter, setSearchFilter] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
+  const [fromDateFilter, setFromDateFilter] = useState("");
+  const [toDateFilter, setToDateFilter] = useState("");
   const [page, setPage] = useState(1);
   const [ordersReloadCount, setOrdersReloadCount] = useState(0);
   const [supplierReloadCount, setSupplierReloadCount] = useState(0);
@@ -179,7 +183,7 @@ export default function PurchaseOrdersPage() {
   const [purchaseOrderForm, setPurchaseOrderForm] = useState<PurchaseOrderFormState>(createEmptyPurchaseOrderForm);
   const purchaseOrderLoadRequestId = useRef(0);
   const supplierRequestKey = `${supplierPage}:${supplierReloadCount}`;
-  const orderRequestKey = `${page}:${statusFilter}:${ordersReloadCount}`;
+  const orderRequestKey = `${page}:${statusFilter}:${searchFilter}:${supplierFilter}:${fromDateFilter}:${toDateFilter}:${ordersReloadCount}`;
 
   useEffect(() => {
     if (useMock) return;
@@ -213,7 +217,14 @@ export default function PurchaseOrdersPage() {
   useEffect(() => {
     if (useMock) return;
     let active = true;
-    getPurchaseOrders({ page, pageSize, status: statusFilter || undefined })
+    getPurchaseOrders({
+      page, pageSize,
+      status: statusFilter || undefined,
+      search: searchFilter.trim() || undefined,
+      supplierId: supplierFilter || undefined,
+      fromDate: fromDateFilter || undefined,
+      toDate: toDateFilter || undefined
+    })
       .then((result) => {
         if (!active) return;
         setOrdersResult({
@@ -237,7 +248,7 @@ export default function PurchaseOrdersPage() {
     return () => {
       active = false;
     };
-  }, [page, statusFilter, ordersReloadCount, orderRequestKey]);
+  }, [page, statusFilter, searchFilter, supplierFilter, fromDateFilter, toDateFilter, ordersReloadCount, orderRequestKey]);
 
   const filteredMockOrders = mockPurchaseOrders
     .map((order) => ({
@@ -251,6 +262,10 @@ export default function PurchaseOrdersPage() {
       totalAmount: order.totalAmount
     }))
     .filter((order) => !statusFilter || order.status === statusFilter)
+    .filter((order) => !searchFilter.trim() || order.code.toUpperCase().startsWith(searchFilter.trim().toUpperCase()))
+    .filter((order) => !supplierFilter || mockPurchaseOrders.find((o) => o.id === order.id)?.supplierId === supplierFilter)
+    .filter((order) => !fromDateFilter || order.orderDate >= fromDateFilter)
+    .filter((order) => !toDateFilter || order.orderDate.slice(0, 10) <= toDateFilter)
     .sort((left, right) => new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime());
   const startIndex = (page - 1) * pageSize;
   const supplierStartIndex = (supplierPage - 1) * supplierPageSize;
@@ -647,28 +662,85 @@ export default function PurchaseOrdersPage() {
       </div>
       {tab === "orders" ? (
         <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <label className="flex items-center gap-2 text-xs font-semibold text-[#536156]">
-              Lọc trạng thái
-              <select
-                className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs"
-                value={statusFilter}
-                onChange={(event) => {
-                  setStatusFilter(event.target.value);
-                  setPage(1);
-                }}
-              >
-                <option value="">Tất cả trạng thái</option>
-                {orderStatuses.map((status) => <option key={status} value={status}>{getStatusLabel(status)}</option>)}
-              </select>
-            </label>
-            <span className="text-xs text-[#66736a]">{totalPages ? `Trang ${page}/${totalPages}` : "Không có trang dữ liệu"}</span>
+          <div className="mb-4 space-y-3">
+            <div className="flex flex-wrap items-end gap-3">
+              {/* Tìm theo mã PO */}
+              <label className="flex flex-col gap-1 text-xs font-semibold text-[#536156]">
+                Tìm mã PO
+                <input
+                  type="search"
+                  placeholder="VD: PO-20261127..."
+                  className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs font-normal"
+                  value={searchFilter}
+                  onChange={(event) => { setSearchFilter(event.target.value); setPage(1); }}
+                />
+              </label>
+              {/* Lọc trạng thái */}
+              <label className="flex flex-col gap-1 text-xs font-semibold text-[#536156]">
+                Trạng thái
+                <select
+                  className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs"
+                  value={statusFilter}
+                  onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}
+                >
+                  <option value="">Tất cả trạng thái</option>
+                  {orderStatuses.map((status) => <option key={status} value={status}>{getStatusLabel(status)}</option>)}
+                </select>
+              </label>
+              {/* Lọc nhà cung cấp — chỉ hiển thị khi không dùng mock */}
+              {!useMock && (
+                <label className="flex flex-col gap-1 text-xs font-semibold text-[#536156]">
+                  Nhà cung cấp
+                  <select
+                    className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs"
+                    value={supplierFilter}
+                    onChange={(event) => { setSupplierFilter(event.target.value); setPage(1); }}
+                  >
+                    <option value="">Tất cả NCC</option>
+                    {(supplierResult?.items ?? []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </label>
+              )}
+              {/* Lọc ngày */}
+              <label className="flex flex-col gap-1 text-xs font-semibold text-[#536156]">
+                Từ ngày
+                <input
+                  type="date"
+                  className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs"
+                  value={fromDateFilter}
+                  max={toDateFilter || undefined}
+                  onChange={(event) => { setFromDateFilter(event.target.value); setPage(1); }}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-xs font-semibold text-[#536156]">
+                Đến ngày
+                <input
+                  type="date"
+                  className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs"
+                  value={toDateFilter}
+                  min={fromDateFilter || undefined}
+                  onChange={(event) => { setToDateFilter(event.target.value); setPage(1); }}
+                />
+              </label>
+              {/* Reset filter */}
+              {(searchFilter || statusFilter || supplierFilter || fromDateFilter || toDateFilter) && (
+                <button
+                  className="self-end rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs text-[#66736a] hover:bg-[#f8fbf7]"
+                  onClick={() => { setSearchFilter(""); setStatusFilter(""); setSupplierFilter(""); setFromDateFilter(""); setToDateFilter(""); setPage(1); }}
+                >
+                  Xóa bộ lọc
+                </button>
+              )}
+            </div>
+            <div className="flex justify-end text-xs text-[#66736a]">
+              {totalPages ? `Trang ${page}/${totalPages}` : "Không có trang dữ liệu"}
+            </div>
           </div>
           {ordersError && <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">{ordersError}<button className="ml-2 font-bold underline" onClick={() => setOrdersReloadCount((current) => current + 1)}>Thử lại</button></div>}
           {ordersLoading ? (
             <p className="py-10 text-center text-sm text-[#66736a]">Đang tải danh sách đơn nhập...</p>
           ) : purchaseOrderItems.length === 0 ? (
-            <p className="py-10 text-center text-sm text-[#66736a]">Không có đơn nhập phù hợp với trạng thái đã chọn.</p>
+            <p className="py-10 text-center text-sm text-[#66736a]">Không có đơn nhập phù hợp với bộ lọc đã chọn.</p>
           ) : (
             <DataTable headers={["Mã PO / ngày tạo", "Nhà cung cấp", "Kho nhận", "Tổng tiền", "Trạng thái", "Thao tác"]}>
               {purchaseOrderItems.map((order) => <tr className="hover:bg-[#f8fbf7]" key={order.id}>

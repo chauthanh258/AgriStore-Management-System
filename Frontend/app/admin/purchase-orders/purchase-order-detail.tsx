@@ -6,6 +6,8 @@ import { isAxiosError } from "axios";
 import { AdminModal } from "../../../components/admin/admin-ui";
 import { formatCurrency } from "../../../lib/formatters";
 import type { PurchaseOrder, ReceivePurchaseOrderRequest } from "../../../types/purchase-orders";
+import type { StockTransaction } from "../../../types/api";
+import { getStockTransactions } from "../../../services/inventory/inventory.service";
 import "./purchase-order-receipt.css";
 
 export type UncertainAction = {
@@ -63,6 +65,9 @@ export default function PurchaseOrderDetailModal({
   const busyRef = useRef(false);
   const reconciliationRequested = useRef(false);
   const [reconciliationLoaded, setReconciliationLoaded] = useState(false);
+  const [history, setHistory] = useState<StockTransaction[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -83,6 +88,26 @@ export default function PurchaseOrderDetailModal({
     });
     return () => { active = false; };
   }, [orderId, reloadKey, loadOrder]);
+
+  // Tải lịch sử nhận hàng (StockTransaction) từ API mỗi khi order reload (chỉ khi không dùng mock)
+  useEffect(() => {
+    if (!orderId || mock) return;
+    let active = true;
+    setHistoryLoading(true);
+    setHistoryError("");
+    getStockTransactions({ referenceType: "PurchaseOrder", referenceId: orderId, pageSize: 50 })
+      .then((result) => {
+        if (!active) return;
+        setHistory(result.items as StockTransaction[]);
+        setHistoryLoading(false);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setHistoryError(errorMessage(err, "Không thể tải lịch sử nhận hàng."));
+        setHistoryLoading(false);
+      });
+    return () => { active = false; };
+  }, [orderId, reloadKey, mock]);
 
   function reload() {
     reconciliationRequested.current = Boolean(unresolved);
@@ -217,6 +242,41 @@ export default function PurchaseOrderDetailModal({
             })}
           </fieldset>
         </form>
+        {/* Lịch sử nhận hàng per-batch */}
+        {!mock && (
+          <section className="mt-5">
+            <h3 className="mb-2 text-xs font-bold text-[#1c2a20]">Lịch sử nhận hàng</h3>
+            {historyLoading ? (
+              <p className="text-xs text-[#66736a]">Đang tải lịch sử...</p>
+            ) : historyError ? (
+              <p className="text-xs text-red-600">{historyError}</p>
+            ) : history.length === 0 ? (
+              <p className="text-xs text-[#66736a]">Chưa có lần nhận hàng nào.</p>
+            ) : (
+              <div className="space-y-2">
+                {history.map((batch) => (
+                  <div key={batch.batchId} className="rounded-lg border border-[#e1e9df] bg-[#f8fbf7] p-3 text-xs">
+                    <p className="font-semibold text-[#536156]">
+                      {new Date(batch.createdAt).toLocaleString("vi-VN")}
+                      {batch.notes && <span className="ml-2 font-normal text-[#66736a]">— {batch.notes}</span>}
+                    </p>
+                    <ul className="mt-1 space-y-0.5">
+                      {batch.lines.map((line) => (
+                        <li key={line.id} className="flex gap-2 text-[#1c2a20]">
+                          <span className="font-medium">{line.productCode} — {line.productName}</span>
+                          <span className="text-[#006948]">+{line.quantity}</span>
+                          {line.quantityBefore != null && line.quantityAfter != null && (
+                            <span className="text-[#66736a]">({line.quantityBefore} → {line.quantityAfter})</span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
         {confirmation && <div className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-900">
           <p>{confirmation === "order" ? "Xác nhận đặt đơn này? Sau khi đặt sẽ không thể sửa đơn nháp." : "Xác nhận nhận các số lượng dưới đây? Thao tác sẽ cộng tồn kho khi dùng API thật."}</p>
           {confirmation === "receive" && <ul className="mt-2 list-inside list-disc">{order.details.filter((detail) => Number(quantities[detail.productId] || 0) > 0).map((detail) => <li key={detail.productId}>{detail.productName}: {quantities[detail.productId]}</li>)}</ul>}
