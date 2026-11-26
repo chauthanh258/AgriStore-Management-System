@@ -9,6 +9,7 @@ import {
 import { inventory } from "../../../data/admin-mock";
 import { getInventories } from "../../../services/inventory/inventory.service";
 import type { InventoryItem } from "../../../types/api";
+import { Plus, ListChecks } from "lucide-react";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 export default function InventoryPage() {
@@ -28,8 +29,8 @@ export default function InventoryPage() {
         title="Kiểm Kê & Quản Trị Tồn Kho Nông Sản"
         description="Hệ thống kho theo thời gian thực (FIFO) và cảnh báo hàng tươi."
         action={
-          <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">
-            ＋ Tạo Phiếu Kiểm Kê (F4)
+          <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1">
+            <Plus className="h-4 w-4" /> Tạo Phiếu Kiểm Kê (F4)
           </button>
         }
       />
@@ -61,7 +62,7 @@ export default function InventoryPage() {
         ]}
       />
       <div className="grid gap-5 xl:grid-cols-[1.6fr_.8fr]">
-        <Panel title="▤ Danh Sách Tồn Kho Chi Tiết">
+        <Panel title="Danh Sách Tồn Kho Chi Tiết">
           <div className="mb-4 flex gap-2">
             <button className="rounded bg-[#006948] px-3 py-2 text-xs text-white">
               Kho lạnh Quận 3

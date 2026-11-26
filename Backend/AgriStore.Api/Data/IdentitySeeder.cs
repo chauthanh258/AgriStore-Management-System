@@ -1,4 +1,5 @@
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,6 +22,25 @@ public static class IdentitySeeder
         var roleManager = services.GetRequiredService<RoleManager<ApplicationRole>>();
         var userManager = services.GetRequiredService<UserManager<ApplicationUser>>();
         var dbContext = services.GetRequiredService<ApplicationDbContext>();
+        var createdRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var permission in PermissionCatalog.All)
+        {
+            var existingPermission = await dbContext.Permissions.FindAsync([permission.Code]);
+            if (existingPermission is null)
+            {
+                dbContext.Permissions.Add(permission);
+            }
+            else
+            {
+                existingPermission.Name = permission.Name;
+                existingPermission.Description = permission.Description;
+                existingPermission.Module = permission.Module;
+                existingPermission.Action = permission.Action;
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
 
         foreach (var (name, description) in Roles)
         {
@@ -41,7 +61,23 @@ public static class IdentitySeeder
                 var errors = string.Join(", ", result.Errors.Select(error => error.Description));
                 throw new InvalidOperationException($"Không thể tạo role '{name}': {errors}");
             }
+
+            createdRoles.Add(name);
         }
+
+        foreach (var roleName in createdRoles)
+        {
+            if (!PermissionCatalog.DefaultRolePermissions.TryGetValue(roleName, out var permissionCodes))
+            {
+                continue;
+            }
+
+            var role = await roleManager.FindByNameAsync(roleName)
+                ?? throw new InvalidOperationException($"Không tìm thấy role '{roleName}' sau khi tạo.");
+            dbContext.RolePermissions.AddRange(permissionCodes.Select(permissionCode =>
+                new RolePermission { RoleId = role.Id, PermissionCode = permissionCode }));
+        }
+        await dbContext.SaveChangesAsync();
 
         var sampleUsers = new[]
         {

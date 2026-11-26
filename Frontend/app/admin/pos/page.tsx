@@ -5,6 +5,7 @@ import { products } from "../../../data/mock";
 import { customers } from "../../../data/admin-mock";
 import { formatCurrency } from "../../../lib/formatters";
 import { IconButton, PageHeader, StatusBadge } from "../../../components/admin/admin-ui";
+import { Command, Scale, X, Minus, Plus, LayoutGrid } from "lucide-react";
 
 export default function PosPage() {
   const [cart, setCart] = useState<Record<string, number>>({
@@ -67,14 +68,14 @@ export default function PosPage() {
         eyebrow="BÁN HÀNG › POINT OF SALE"
         title="Bán hàng tại quầy (POS)"
         description="Tìm sản phẩm nhanh, tra cứu khách bằng số điện thoại và thanh toán an toàn."
-        action={<button onClick={() => { setCart({}); setCustomerId(null); setMessage(""); }} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">⌘ F2 Đơn mới</button>}
+        action={<button onClick={() => { setCart({}); setCustomerId(null); setMessage(""); }} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Command className="h-4 w-4" /> F2 Đơn mới</button>}
       />
       {message && <div className="mb-4 rounded-lg border border-[#b7dfc7] bg-[#effaf2] px-4 py-3 text-xs text-[#065f46]">{message}</div>}
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <section>
           <div className="mb-4 flex gap-2 rounded-xl border border-[#dfe8dd] bg-white p-3">
             <input autoFocus className="min-w-0 flex-1 rounded-lg border p-3 text-xs" placeholder="Tìm sản phẩm hoặc SKU..." value={search} onChange={(event) => setSearch(event.target.value)} />
-            <button className="rounded-lg bg-[#f2f7ef] px-4 text-xs" type="button">⚖ Cân điện tử</button>
+            <button className="rounded-lg bg-[#f2f7ef] px-4 text-xs flex items-center gap-1" type="button"><Scale className="h-4 w-4" /> Cân điện tử</button>
           </div>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {visibleProducts.map((product) => (
@@ -95,18 +96,18 @@ export default function PosPage() {
           </div>
           <div className="mb-4 flex items-center justify-between rounded-lg bg-[#f2f7ef] p-3 text-xs">
             <span>{selectedCustomer ? `${selectedCustomer.fullName} · ${selectedCustomer.memberTier}` : "Khách vãng lai"}</span>
-            {selectedCustomer && <IconButton label="Bỏ chọn khách" onClick={() => { setCustomerId(null); setCustomerQuery(""); }}>×</IconButton>}
+            {selectedCustomer && <IconButton label="Bỏ chọn khách" onClick={() => { setCustomerId(null); setCustomerQuery(""); }}><X className="h-4 w-4" /></IconButton>}
           </div>
           <div className="space-y-2">
             {Object.entries(cart).map(([id, quantity]) => {
               const product = products.find((item) => item.id === id);
-              return product ? <div className="flex items-center justify-between rounded-lg border border-[#e7eee4] p-3 text-xs" key={id}><span className="min-w-0"><b className="block truncate">{product.name}</b><small className="text-[#66736a]">{formatCurrency(product.sellingPrice)} · {product.unitName}</small></span><span className="ml-2 flex items-center gap-2"><IconButton label="Giảm số lượng" onClick={() => changeQuantity(id, -1)}>−</IconButton><b>{quantity}</b><IconButton label="Tăng số lượng" onClick={() => changeQuantity(id, 1)}>＋</IconButton></span></div> : null;
+              return product ? <div className="flex items-center justify-between rounded-lg border border-[#e7eee4] p-3 text-xs" key={id}><span className="min-w-0"><b className="block truncate">{product.name}</b><small className="text-[#66736a]">{formatCurrency(product.sellingPrice)} · {product.unitName}</small></span><span className="ml-2 flex items-center gap-2"><IconButton label="Giảm số lượng" onClick={() => changeQuantity(id, -1)}><Minus className="h-4 w-4" /></IconButton><b>{quantity}</b><IconButton label="Tăng số lượng" onClick={() => changeQuantity(id, 1)}><Plus className="h-4 w-4" /></IconButton></span></div> : null;
             })}
           </div>
           <input className="my-4 w-full rounded-lg border p-3 text-xs" placeholder="Mã voucher..." />
           <div className="space-y-3 border-t pt-4 text-xs"><div className="flex justify-between"><span>Tạm tính</span><b>{formatCurrency(total)}</b></div><div className="flex justify-between"><span>Ưu đãi</span><b className="text-[#006948]">-30.000 đ</b></div><div className="flex justify-between text-lg"><b>Khách phải trả</b><b className="text-[#006948]">{formatCurrency(Math.max(0, total - 30000))}</b></div></div>
           <div className="mt-4 grid grid-cols-3 gap-2">{[["cash", "Tiền mặt"], ["qr", "VietQR"], ["card", "Thẻ"]].map(([value, label]) => <button key={value} onClick={() => setPaymentMethod(value as typeof paymentMethod)} className={`rounded-lg p-3 text-[10px] ${paymentMethod === value ? "bg-[#006948] text-white" : "bg-[#f2f7ef]"}`}>{label}</button>)}</div>
-          <button onClick={pay} className="mt-3 w-full rounded-xl bg-[#006948] py-4 font-bold text-white">▣ THANH TOÁN & IN (F12)</button>
+          <button onClick={pay} className="mt-3 w-full rounded-xl bg-[#006948] py-4 font-bold text-white flex items-center justify-center gap-1"><LayoutGrid className="h-5 w-5" /> THANH TOÁN & IN (F12)</button>
         </aside>
       </div>
     </>

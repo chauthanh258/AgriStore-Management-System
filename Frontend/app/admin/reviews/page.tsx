@@ -10,6 +10,7 @@ import {
 import { reviews } from "../../../data/admin-mock";
 import { formatCurrency } from "../../../lib/formatters";
 import Image from "next/image";
+import { Download, Settings, Check, Search, Image as ImageIcon, AlertTriangle, Reply, RotateCcw, Ban, Play } from "lucide-react";
 
 const stars = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
 
@@ -55,17 +56,17 @@ export default function ReviewsPage() {
         description="Theo dõi chất lượng, chất lượng dịch vụ và phản hồi của khách hàng sau mỗi đơn hàng."
         action={
           <div className="flex flex-wrap gap-2">
-            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs">
-              ↧ Xuất Báo Cáo Feedback
+            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs flex items-center gap-1">
+              <Download className="h-4 w-4" /> Xuất Báo Cáo Feedback
             </button>
-            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs">
-              ☷ Quy Tắc Lọc Vi Phạm
+            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs flex items-center gap-1">
+              <Settings className="h-4 w-4" /> Quy Tắc Lọc Vi Phạm
             </button>
             <button
               onClick={approveAllPending}
-              className="rounded-lg bg-[#006948] px-3 py-2 text-xs font-bold text-white"
+              className="rounded-lg bg-[#006948] px-3 py-2 text-xs font-bold text-white flex items-center gap-1"
             >
-              ✓ Duyệt tất cả đang chờ
+              <Check className="h-4 w-4" /> Duyệt tất cả đang chờ
             </button>
           </div>
         }
@@ -130,7 +131,7 @@ export default function ReviewsPage() {
         <div className="mt-3 flex flex-wrap gap-2">
           <input
             className="min-w-55 flex-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs"
-            placeholder="⌕ Tìm theo khách, comment, mã đơn..."
+            placeholder="Tìm theo khách, comment, mã đơn..."
           />
           <select className="rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs">
             <option>Tất cả sao</option>
@@ -201,18 +202,18 @@ export default function ReviewsPage() {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
                       {review.hasImages && (
-                        <span className="rounded bg-[#eef2ec] px-2 py-1">
-                          ▧ 2 ảnh đính kèm
+                        <span className="rounded bg-[#eef2ec] px-2 py-1 flex items-center gap-1">
+                          <ImageIcon className="h-3 w-3" /> 2 ảnh đính kèm
                         </span>
                       )}
                       {review.isFlagged && (
-                        <span className="rounded bg-[#fee2e2] px-2 py-1 text-red-700">
-                          ⚠ Cần CSKH xử lý
+                        <span className="rounded bg-[#fee2e2] px-2 py-1 text-red-700 flex items-center gap-1">
+                          <AlertTriangle className="h-3 w-3" /> Cần CSKH xử lý
                         </span>
                       )}
                       {review.reply && (
-                        <span className="rounded bg-[#d1fae5] px-2 py-1 text-[#065f46]">
-                          ↩ Đã phản hồi
+                        <span className="rounded bg-[#d1fae5] px-2 py-1 text-[#065f46] flex items-center gap-1">
+                          <Reply className="h-3 w-3" /> Đã phản hồi
                         </span>
                       )}
                     </div>
@@ -287,18 +288,18 @@ export default function ReviewsPage() {
                 <div className="mt-2 grid grid-cols-3 gap-2">
                   <button
                     onClick={() => approve(true)}
-                    className="rounded-lg bg-[#006948] p-2 text-[10px] font-bold text-white"
+                    className="rounded-lg bg-[#006948] p-2 text-[10px] font-bold text-white flex items-center justify-center gap-1"
                   >
-                    ✓ Duyệt hiển thị
+                    <Check className="h-3 w-3" /> Duyệt hiển thị
                   </button>
                   <button
                     onClick={() => approve(false)}
-                    className="rounded-lg bg-[#fef3c7] p-2 text-[10px] text-[#92400e]"
+                    className="rounded-lg bg-[#fef3c7] p-2 text-[10px] text-[#92400e] flex items-center justify-center gap-1"
                   >
-                    ↶ Từ chối
+                    <RotateCcw className="h-3 w-3" /> Từ chối
                   </button>
-                  <button className="rounded-lg bg-[#fee2e2] p-2 text-[10px] text-red-700">
-                    ⊘ Khóa vi phạm
+                  <button className="rounded-lg bg-[#fee2e2] p-2 text-[10px] text-red-700 flex items-center justify-center gap-1">
+                    <Ban className="h-3 w-3" /> Khóa vi phạm
                   </button>
                 </div>
               </div>
@@ -307,8 +308,8 @@ export default function ReviewsPage() {
                 <p className="mt-2 text-[#536156]">
                   {selected.reply ?? "Chưa có phản hồi cho khách hàng."}
                 </p>
-                <button className="mt-2 rounded bg-[#006948] px-3 py-2 text-[10px] font-bold text-white">
-                  ▶ Cập nhật & Gửi phản hồi cho khách
+                <button className="mt-2 rounded bg-[#006948] px-3 py-2 text-[10px] font-bold text-white flex items-center gap-1">
+                  <Play className="h-3 w-3" /> Cập nhật & Gửi phản hồi cho khách
                 </button>
               </div>
             </div>

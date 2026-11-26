@@ -29,3 +29,23 @@ public sealed record RoleResponse(
     bool IsSystemRole);
 
 public sealed record RoleListResponse(IReadOnlyCollection<RoleResponse> Items);
+
+public sealed record PermissionResponse(
+    string Code,
+    string Name,
+    string? Description,
+    string Module,
+    string Action);
+
+public sealed record RolePermissionsResponse(
+    Guid RoleId,
+    string RoleName,
+    IReadOnlyCollection<string> PermissionCodes,
+    bool IsSystemRole,
+    bool HasFullAccess);
+
+public sealed record UpdateRolePermissionsRequest
+{
+    [Required]
+    public required IReadOnlyCollection<string> PermissionCodes { get; init; }
+}

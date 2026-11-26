@@ -8,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class WarehousesController(IWarehouseService warehouseService) : ControllerBase
 {
     [HttpGet]

@@ -352,6 +352,26 @@ export interface Role {
   isSystemRole: boolean;
 }
 
+export interface Permission {
+  code: string;
+  name: string;
+  description: string | null;
+  module: string;
+  action: string;
+}
+
+export interface RolePermissions {
+  roleId: string;
+  roleName: string;
+  permissionCodes: string[];
+  isSystemRole: boolean;
+  hasFullAccess: boolean;
+}
+
+export interface UpdateRolePermissionsRequest {
+  permissionCodes: string[];
+}
+
 export interface ProductQuery {
   page?: number;
   pageSize?: number;

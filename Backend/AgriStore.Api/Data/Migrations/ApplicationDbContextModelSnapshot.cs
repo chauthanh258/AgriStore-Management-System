@@ -650,6 +650,129 @@ namespace AgriStore.Api.Data.Migrations
                     b.ToTable("Payments", (string)null);
                 });
 
+            modelBuilder.Entity("AgriStore.Api.Domain.Entities.Permission", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)");
+
+                    b.HasKey("Code");
+
+                    b.HasIndex("Module", "Action")
+                        .IsUnique();
+
+                    b.ToTable("Permissions", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "users.read",
+                            Action = "read",
+                            Description = "Xem danh sách và thông tin người dùng.",
+                            Module = "users",
+                            Name = "Xem người dùng"
+                        },
+                        new
+                        {
+                            Code = "users.manage",
+                            Action = "manage",
+                            Description = "Cập nhật và khóa/mở tài khoản người dùng.",
+                            Module = "users",
+                            Name = "Quản lý người dùng"
+                        },
+                        new
+                        {
+                            Code = "users.assign_roles",
+                            Action = "assign_roles",
+                            Description = "Thay đổi vai trò được gán cho người dùng.",
+                            Module = "users",
+                            Name = "Gán vai trò"
+                        },
+                        new
+                        {
+                            Code = "roles.manage",
+                            Action = "manage",
+                            Description = "Tạo, sửa, xóa vai trò và gán permission.",
+                            Module = "roles",
+                            Name = "Quản lý vai trò"
+                        },
+                        new
+                        {
+                            Code = "roles.assign_permissions",
+                            Action = "assign_permissions",
+                            Description = "Thay đổi permission được gán cho role.",
+                            Module = "roles",
+                            Name = "Gán permission cho vai trò"
+                        },
+                        new
+                        {
+                            Code = "products.view",
+                            Action = "view",
+                            Description = "Xem danh sách và chi tiết sản phẩm.",
+                            Module = "products",
+                            Name = "Xem sản phẩm"
+                        },
+                        new
+                        {
+                            Code = "products.manage",
+                            Action = "manage",
+                            Description = "Tạo, sửa, xóa sản phẩm và quản lý hình ảnh.",
+                            Module = "products",
+                            Name = "Quản lý sản phẩm"
+                        },
+                        new
+                        {
+                            Code = "catalog.manage",
+                            Action = "manage",
+                            Description = "Quản lý danh mục, đơn vị và duyệt đánh giá.",
+                            Module = "catalog",
+                            Name = "Quản lý danh mục"
+                        },
+                        new
+                        {
+                            Code = "operations.manage",
+                            Action = "manage",
+                            Description = "Quản lý đơn hàng, kho, nhà cung cấp, giao hàng và thanh toán.",
+                            Module = "operations",
+                            Name = "Quản lý vận hành"
+                        },
+                        new
+                        {
+                            Code = "customers.manage",
+                            Action = "manage",
+                            Description = "Xem và quản lý khách hàng cùng sổ địa chỉ.",
+                            Module = "customers",
+                            Name = "Quản lý khách hàng"
+                        },
+                        new
+                        {
+                            Code = "reports.view",
+                            Action = "view",
+                            Description = "Xem báo cáo doanh thu, sản phẩm bán chạy và tồn kho.",
+                            Module = "reports",
+                            Name = "Xem báo cáo"
+                        });
+                });
+
             modelBuilder.Entity("AgriStore.Api.Domain.Entities.Product", b =>
                 {
                     b.Property<Guid>("Id")
@@ -888,6 +1011,22 @@ namespace AgriStore.Api.Data.Migrations
                     b.HasIndex("PurchaseOrderId");
 
                     b.ToTable("PurchaseOrderDetails", (string)null);
+                });
+
+            modelBuilder.Entity("AgriStore.Api.Domain.Entities.RolePermission", b =>
+                {
+                    b.Property<Guid>("RoleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PermissionCode")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("RoleId", "PermissionCode");
+
+                    b.HasIndex("PermissionCode");
+
+                    b.ToTable("RolePermissions", (string)null);
                 });
 
             modelBuilder.Entity("AgriStore.Api.Domain.Entities.ShippingMethod", b =>
@@ -1386,6 +1525,21 @@ namespace AgriStore.Api.Data.Migrations
                     b.HasOne("AgriStore.Api.Domain.Entities.PurchaseOrder", null)
                         .WithMany()
                         .HasForeignKey("PurchaseOrderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("AgriStore.Api.Domain.Entities.RolePermission", b =>
+                {
+                    b.HasOne("AgriStore.Api.Domain.Entities.Permission", null)
+                        .WithMany()
+                        .HasForeignKey("PermissionCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("AgriStore.Api.Domain.Entities.ApplicationRole", null)
+                        .WithMany()
+                        .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

@@ -1,4 +1,5 @@
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,8 @@ public class ApplicationDbContext : IdentityDbContext<
     public DbSet<ProductReview> ProductReviews => Set<ProductReview>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -60,6 +63,34 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.ToTable("Roles");
             entity.Property(role => role.Description).HasMaxLength(500);
             entity.Property(role => role.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        builder.Entity<Permission>(entity =>
+        {
+            entity.ToTable("Permissions");
+            entity.HasKey(permission => permission.Code);
+            entity.Property(permission => permission.Code).HasMaxLength(100);
+            entity.Property(permission => permission.Name).HasMaxLength(150).IsRequired();
+            entity.Property(permission => permission.Description).HasMaxLength(500);
+            entity.Property(permission => permission.Module).HasMaxLength(50).IsRequired();
+            entity.Property(permission => permission.Action).HasMaxLength(50).IsRequired();
+            entity.HasIndex(permission => new { permission.Module, permission.Action }).IsUnique();
+            entity.HasData(PermissionCatalog.All);
+        });
+
+        builder.Entity<RolePermission>(entity =>
+        {
+            entity.ToTable("RolePermissions");
+            entity.HasKey(rolePermission => new { rolePermission.RoleId, rolePermission.PermissionCode });
+            entity.Property(rolePermission => rolePermission.PermissionCode).HasMaxLength(100);
+            entity.HasOne<ApplicationRole>()
+                .WithMany()
+                .HasForeignKey(rolePermission => rolePermission.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Permission>()
+                .WithMany()
+                .HasForeignKey(rolePermission => rolePermission.PermissionCode)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ApplicationUserRole>(entity =>

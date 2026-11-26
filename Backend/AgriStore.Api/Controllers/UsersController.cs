@@ -1,8 +1,10 @@
 using System.Security.Claims;
+using AgriStore.Api.Domain.Entities;
 using AgriStore.Api.DTOs.Users;
 using AgriStore.Api.Security;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AgriStore.Api.Controllers;
@@ -10,11 +12,14 @@ namespace AgriStore.Api.Controllers;
 /// <summary>API quản lý tài khoản người dùng.</summary>
 [ApiController]
 [Route("api/users")]
-// [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
-public sealed class UsersController(IUserService userService) : ControllerBase
+public sealed class UsersController(
+    IUserService userService,
+    UserManager<ApplicationUser> userManager,
+    IAuthorizationService authorizationService) : ControllerBase
 {
     /// <summary>Lấy danh sách user theo điều kiện tìm kiếm và phân trang.</summary>
     [HttpGet]
+    [Authorize(Policy = PermissionPolicies.UsersRead)]
     [ProducesResponseType(typeof(UserListResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<UserListResponse>> GetAll(
         [FromQuery] UserListQuery query,
@@ -25,6 +30,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
 
     /// <summary>Lấy thông tin chi tiết một user.</summary>
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = PermissionPolicies.UsersRead)]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserResponse>> GetById(Guid id, CancellationToken cancellationToken)
@@ -35,6 +41,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
 
     /// <summary>Cập nhật thông tin cơ bản của một user.</summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -44,20 +51,25 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         UpdateUserRequest request,
         CancellationToken cancellationToken)
     {
-        var actorIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(actorIdValue, out var actorId))
+        var (actorId, actorRoles) = await GetActorAsync();
+        if (actorId is null)
         {
             return Unauthorized();
         }
 
-        var actorRoles = User.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
-        var result = await userService.UpdateAsync(id, request, actorId, actorRoles, cancellationToken);
+        if (request.Roles is not null &&
+            !(await authorizationService.AuthorizeAsync(User, AuthorizationPolicies.AssignRoles)).Succeeded)
+        {
+            return Forbid();
+        }
+
+        var result = await userService.UpdateAsync(id, request, actorId.Value, actorRoles, cancellationToken);
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
     /// <summary>Khóa hoặc mở khóa một user.</summary>
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Policy = AuthorizationPolicies.ManageUsers)]
     [ProducesResponseType(typeof(UserResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
@@ -67,20 +79,18 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         UserStatusRequest request,
         CancellationToken cancellationToken)
     {
-        var actorIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
-        if (!Guid.TryParse(actorIdValue, out var actorId))
+        var (actorId, actorRoles) = await GetActorAsync();
+        if (actorId is null)
         {
             return Unauthorized();
         }
 
-        var actorRoles = User.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray();
-        var result = await userService.SetActiveAsync(id, request.IsActive, actorId, actorRoles, cancellationToken);
+        var result = await userService.SetActiveAsync(id, request.IsActive, actorId.Value, actorRoles, cancellationToken);
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
     [HttpGet("{id:guid}/roles")]
-    // [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
+    [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
     [ProducesResponseType(typeof(UserRolesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<UserRolesResponse>> GetRoles(Guid id, CancellationToken cancellationToken)
@@ -90,7 +100,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
     }
 
     [HttpPut("{id:guid}/roles")]
-    // [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
+    [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
     [ProducesResponseType(typeof(UserRolesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
@@ -101,7 +111,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         UpdateUserRolesRequest request,
         CancellationToken cancellationToken)
     {
-        var (actorId, actorRoles) = GetActor();
+        var (actorId, actorRoles) = await GetActorAsync();
         if (actorId is null)
         {
             return Unauthorized();
@@ -112,7 +122,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
     }
 
     [HttpPost("{id:guid}/roles/{roleName}")]
-    // [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
+    [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
     [ProducesResponseType(typeof(UserRolesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -122,7 +132,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         string roleName,
         CancellationToken cancellationToken)
     {
-        var (actorId, actorRoles) = GetActor();
+        var (actorId, actorRoles) = await GetActorAsync();
         if (actorId is null)
         {
             return Unauthorized();
@@ -133,7 +143,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
     }
 
     [HttpDelete("{id:guid}/roles/{roleName}")]
-    // [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
+    [Authorize(Policy = AuthorizationPolicies.AssignRoles)]
     [ProducesResponseType(typeof(UserRolesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -143,7 +153,7 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         string roleName,
         CancellationToken cancellationToken)
     {
-        var (actorId, actorRoles) = GetActor();
+        var (actorId, actorRoles) = await GetActorAsync();
         if (actorId is null)
         {
             return Unauthorized();
@@ -153,11 +163,22 @@ public sealed class UsersController(IUserService userService) : ControllerBase
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
-    private (Guid? ActorId, IReadOnlyCollection<string> Roles) GetActor()
+    private async Task<(Guid? ActorId, IReadOnlyCollection<string> Roles)> GetActorAsync()
     {
         var actorIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
-        return (Guid.TryParse(actorIdValue, out var actorId) ? actorId : null,
-            User.FindAll(ClaimTypes.Role).Select(claim => claim.Value).ToArray());
+        if (!Guid.TryParse(actorIdValue, out var actorId))
+        {
+            return (null, []);
+        }
+
+        var actor = await userManager.FindByIdAsync(actorId.ToString());
+        if (actor is null)
+        {
+            return (null, []);
+        }
+
+        var actorRoles = await userManager.GetRolesAsync(actor);
+        return (actorId, actorRoles.ToArray());
     }
 
     private ObjectResult Problem(UserServiceResult<UserResponse> result)

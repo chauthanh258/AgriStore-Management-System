@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import { formatCurrency } from "../../lib/formatters";
 
 export function IconButton({
@@ -62,7 +63,7 @@ export function AdminModal({
             )}
           </div>
           <IconButton label="Đóng cửa sổ" onClick={onClose}>
-            ×
+            <X className="h-4 w-4" />
           </IconButton>
         </div>
         <div className="p-5">{children}</div>

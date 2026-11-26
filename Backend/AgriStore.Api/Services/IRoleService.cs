@@ -9,6 +9,14 @@ public interface IRoleService
     Task<RoleServiceResult<RoleResponse>> CreateAsync(CreateRoleRequest request, CancellationToken cancellationToken);
     Task<RoleServiceResult<RoleResponse>> UpdateAsync(Guid id, UpdateRoleRequest request, CancellationToken cancellationToken);
     Task<RoleServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
+    Task<IReadOnlyCollection<PermissionResponse>> GetPermissionsAsync(CancellationToken cancellationToken);
+    Task<RoleServiceResult<RolePermissionsResponse>> GetPermissionsForRoleAsync(
+        Guid roleId,
+        CancellationToken cancellationToken);
+    Task<RoleServiceResult<RolePermissionsResponse>> ReplacePermissionsAsync(
+        Guid roleId,
+        IReadOnlyCollection<string> permissionCodes,
+        CancellationToken cancellationToken);
 }
 
 public sealed record RoleServiceResult<T>(

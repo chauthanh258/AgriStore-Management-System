@@ -8,7 +8,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-public sealed class ProductReviewsController(IProductReviewService productReviewService) : ControllerBase
+public sealed class ProductReviewsController(
+    IProductReviewService productReviewService,
+    IAuthorizationService authorizationService) : ControllerBase
 {
     [HttpGet("api/products/{productId:guid}/reviews")]
     [AllowAnonymous]
@@ -28,7 +30,8 @@ public sealed class ProductReviewsController(IProductReviewService productReview
             return ValidationProblem(ModelState);
         }
 
-        var isModerator = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.Manager);
+        var isModerator = (await authorizationService
+            .AuthorizeAsync(User, AuthorizationPolicies.ManageCatalog)).Succeeded;
         if (query.IncludePending && !isModerator)
         {
             return Forbid();
@@ -98,7 +101,8 @@ public sealed class ProductReviewsController(IProductReviewService productReview
             return Unauthorized();
         }
 
-        var isModerator = User.IsInRole(SystemRoles.Admin) || User.IsInRole(SystemRoles.Manager);
+        var isModerator = (await authorizationService
+            .AuthorizeAsync(User, AuthorizationPolicies.ManageCatalog)).Succeeded;
         var result = await productReviewService.DeleteAsync(
             reviewId,
             userId,

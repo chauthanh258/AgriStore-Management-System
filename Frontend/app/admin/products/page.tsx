@@ -26,6 +26,7 @@ import {
   StatusBadge
 } from "../../../components/admin/admin-ui";
 import Image from "next/image";
+import { Plus, Edit, Trash2, Pause, Play, X } from "lucide-react";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 const emptyProduct: ProductRequest = {
@@ -387,9 +388,9 @@ export default function ProductsAdminPage() {
                   ? openCreateCategory
                   : openCreateUnit
             }
-            className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white"
+            className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"
           >
-            ＋ Thêm {tab === "products" ? "sản phẩm" : tab === "categories" ? "danh mục" : "đơn vị"}
+            <Plus className="h-4 w-4" /> Thêm {tab === "products" ? "sản phẩm" : tab === "categories" ? "danh mục" : "đơn vị"}
           </button>
         }
       />
@@ -469,8 +470,10 @@ export default function ProductsAdminPage() {
                       <div className="flex items-center gap-2">
                         {product.mainImageUrl && (
                           <Image
-                            src={product.mainImageUrl}
+                            // src={product.mainImageUrl}
                             alt=""
+                            width={40}
+                            height={40}
                             className="h-10 w-10 rounded object-cover"
                           />
                         )}
@@ -497,7 +500,7 @@ export default function ProductsAdminPage() {
                         label={`Sửa ${product.name}`}
                         onClick={() => void openEditProduct(product)}
                       >
-                        ✎
+                        <Edit className="h-4 w-4" />
                       </IconButton>{" "}
                       <IconButton
                         label={`Xóa ${product.name}`}
@@ -512,7 +515,7 @@ export default function ProductsAdminPage() {
                               );
                         }}
                       >
-                        🗑
+                        <Trash2 className="h-4 w-4" />
                       </IconButton>
                     </td>
                   </tr>
@@ -559,20 +562,20 @@ export default function ProductsAdminPage() {
                       label={`Sửa ${category.name}`}
                       onClick={() => openEditCategory(category)}
                     >
-                      ✎
+                      <Edit className="h-4 w-4" />
                     </IconButton>
                     <IconButton
                       label={`${category.isActive ? "Tắt" : "Bật"} ${category.name}`}
                       onClick={() => void toggleCategory(category)}
                     >
-                      {category.isActive ? "⏸" : "▶"}
+                      {category.isActive ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                     </IconButton>
                     <IconButton
                       label={`Xóa ${category.name}`}
                       tone="danger"
                       onClick={() => void removeCategory(category)}
                     >
-                      🗑
+                      <Trash2 className="h-4 w-4" />
                     </IconButton>
                   </td>
                 </tr>
@@ -588,13 +591,13 @@ export default function ProductsAdminPage() {
                 <td className="px-3 py-3">{unit.symbol ?? unit.abbreviation ?? "—"}</td>
                 <td className="px-3 py-3"><StatusBadge>Đang hoạt động</StatusBadge></td>
                 <td className="space-x-2 px-3 py-3">
-                  <IconButton label={`Sửa ${unit.name}`} onClick={() => openEditUnit(unit)}>✎</IconButton>
+                  <IconButton label={`Sửa ${unit.name}`} onClick={() => openEditUnit(unit)}><Edit className="h-4 w-4" /></IconButton>
                   <IconButton label={`Xóa ${unit.name}`} tone="danger" onClick={() => {
                     if (!window.confirm(`Xóa đơn vị "${unit.name}"?`)) return;
                     void unitRepository.deleteUnit(unit.id)
                       .then(async () => setUnits((await unitRepository.getUnits()).items))
                       .catch((actionError) => setError(errorMessage(actionError)));
-                  }}>🗑</IconButton>
+                  }}><Trash2 className="h-4 w-4" /></IconButton>
                 </td>
               </tr>
             ))}
@@ -624,7 +627,7 @@ export default function ProductsAdminPage() {
                 onClick={() => setProductModal(false)}
                 className="flex h-9 w-9 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
               >
-                <span className="text-2xl leading-none">×</span>
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -654,7 +657,7 @@ export default function ProductsAdminPage() {
                         onClick={() => void removeImage(image)}
                         className="absolute right-1 top-1 rounded bg-red-600 px-1 text-xs text-white"
                       >
-                        ×
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   ))}
@@ -677,13 +680,13 @@ export default function ProductsAdminPage() {
                         onClick={() => setNewImages((current) => current.filter((_, i) => i !== index))}
                         className="absolute right-1 top-1 rounded bg-red-600 px-1 text-xs text-white"
                       >
-                        ×
+                        <X className="h-4 w-4" />
                       </button>
                     </div>
                   ))}
                 </div>
-                <label className="block cursor-pointer rounded-lg border border-dashed border-gray-300 p-3 text-center text-xs text-gray-500 hover:border-[#006948]">
-                  ＋ Thêm nhiều ảnh
+                <label className="cursor-pointer rounded-lg border border-dashed border-gray-300 p-3 text-center text-xs text-gray-500 hover:border-[#006948] flex items-center justify-center gap-1">
+                  <Plus className="h-4 w-4" /> Thêm nhiều ảnh
                   <input
                     type="file"
                     multiple
@@ -925,7 +928,7 @@ export default function ProductsAdminPage() {
                 onClick={() => setCategoryModal(false)}
                 className="text-2xl text-gray-400"
               >
-                ×
+                <X className="h-6 w-6" />
               </button>
             </div>
             <div className="space-y-4">
