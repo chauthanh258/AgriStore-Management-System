@@ -86,6 +86,51 @@ public sealed class ProductCategoryApiTests
     }
 
     [Fact]
+    public async Task ListProducts_FiltersInactiveProducts_WhenRequested()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        var catalog = await factory.SeedCatalogAsync();
+        var activeProductId = await factory.SeedProductAsync(catalog, "ACTIVE-01", "Active product");
+        await factory.SeedProductAsync(catalog, "INACTIVE-01", "Inactive product", isActive: false);
+
+        var result = await client.GetFromJsonAsync<ProductListResponse>(
+            "/api/products?isActive=true&page=1&pageSize=10");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(activeProductId, Assert.Single(result.Items).Id);
+    }
+
+    [Fact]
+    public async Task PublicProductEndpoints_HideInactiveProductsFromNonManagers()
+    {
+        using var factory = new ApiTestFactory();
+        var catalog = await factory.SeedCatalogAsync();
+        var activeProductId = await factory.SeedProductAsync(catalog, "ACTIVE-02", "Public product");
+        var inactiveProductId = await factory.SeedProductAsync(
+            catalog, "INACTIVE-02", "Hidden product", isActive: false);
+        using var publicClient = factory.CreateClientAs(Guid.NewGuid());
+
+        var publicList = await publicClient.GetFromJsonAsync<ProductListResponse>(
+            "/api/products?isActive=false&page=1&pageSize=10");
+        var inactiveDetails = await publicClient.GetAsync($"/api/products/{inactiveProductId}");
+
+        Assert.NotNull(publicList);
+        Assert.Equal(activeProductId, Assert.Single(publicList.Items).Id);
+        Assert.Equal(HttpStatusCode.NotFound, inactiveDetails.StatusCode);
+
+        using var adminClient = factory.CreateClient();
+        var adminList = await adminClient.GetFromJsonAsync<ProductListResponse>(
+            "/api/products?isActive=false&page=1&pageSize=10");
+        var adminDetails = await adminClient.GetAsync($"/api/products/{inactiveProductId}");
+
+        Assert.NotNull(adminList);
+        Assert.Equal(inactiveProductId, Assert.Single(adminList.Items).Id);
+        Assert.Equal(HttpStatusCode.OK, adminDetails.StatusCode);
+    }
+
+    [Fact]
     public async Task ProductImages_CanBeUploadedSelectedAndDeleted_AndRejectInvalidFiles()
     {
         using var factory = new ApiTestFactory();

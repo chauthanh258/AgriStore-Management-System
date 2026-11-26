@@ -44,7 +44,15 @@ export async function mockProducts(params: ProductQuery = {}): Promise<Paginated
   if (params.maxPrice !== undefined) result = result.filter((product) => product.sellingPrice <= params.maxPrice!);
   if (params.isFeatured !== undefined) result = result.filter((product) => product.isFeatured === params.isFeatured);
   if (params.isActive !== undefined) result = result.filter((product) => product.isActive === params.isActive);
-  if (params.sortBy) result.sort((a, b) => String(a[params.sortBy!]).localeCompare(String(b[params.sortBy!])));
+  if (params.sortBy) {
+    result.sort((a, b) => {
+      const left = a[params.sortBy!];
+      const right = b[params.sortBy!];
+      return typeof left === "number" && typeof right === "number"
+        ? left - right
+        : String(left).localeCompare(String(right));
+    });
+  }
   if (params.sortDirection === "desc") result.reverse();
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 20;

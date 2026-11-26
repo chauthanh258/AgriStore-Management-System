@@ -88,7 +88,6 @@ public sealed class ProductService(
         };
         var pageProductsQuery = orderedProductsQuery
             .ThenBy(product => product.Code)
-            .ThenBy(product => product.Id)
             .Skip(skip)
             .Take(pageSize);
         var items = await (
@@ -484,7 +483,7 @@ public sealed class ProductService(
         }
 
         if (await dbContext.Products.AsNoTracking().AnyAsync(
-                product => product.Code.Trim().ToUpper() == code &&
+                product => product.Code == code &&
                     (!excludedId.HasValue || product.Id != excludedId.Value),
                 cancellationToken))
         {

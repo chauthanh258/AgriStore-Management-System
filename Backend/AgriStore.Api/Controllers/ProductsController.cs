@@ -8,7 +8,9 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/products")]
-public sealed class ProductsController(IProductService productService) : ControllerBase
+public sealed class ProductsController(
+    IProductService productService,
+    IAuthorizationService authorizationService) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ProductListResponse), StatusCodes.Status200OK)]
@@ -52,6 +54,12 @@ public sealed class ProductsController(IProductService productService) : Control
             return ValidationProblem(ModelState);
         }
 
+        if (!(await authorizationService
+                .AuthorizeAsync(User, AuthorizationPolicies.ManageProducts)).Succeeded)
+        {
+            query = query with { IsActive = true };
+        }
+
         return Ok(await productService.GetPagedAsync(query, cancellationToken));
     }
 
@@ -60,8 +68,12 @@ public sealed class ProductsController(IProductService productService) : Control
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProductResponse>> GetById(Guid id, CancellationToken cancellationToken)
     {
+        var canManageProducts = (await authorizationService
+            .AuthorizeAsync(User, AuthorizationPolicies.ManageProducts)).Succeeded;
         var product = await productService.GetByIdAsync(id, cancellationToken);
-        return product is null ? NotFound() : Ok(product);
+        return product is null || (!canManageProducts && !product.IsActive)
+            ? NotFound()
+            : Ok(product);
     }
 
     [HttpPost("{id:guid}/images")]

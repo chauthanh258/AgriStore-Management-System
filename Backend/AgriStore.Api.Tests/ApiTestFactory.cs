@@ -104,7 +104,8 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
         CatalogSeed catalog,
         string code,
         string name,
-        decimal sellingPrice = 10m)
+        decimal sellingPrice = 10m,
+        bool isActive = true)
     {
         using var scope = Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -118,7 +119,7 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
             CostPrice = 5m,
             SellingPrice = sellingPrice,
             MinStockAlert = 1m,
-            IsActive = true
+            IsActive = isActive
         };
         dbContext.Products.Add(product);
         await dbContext.SaveChangesAsync();

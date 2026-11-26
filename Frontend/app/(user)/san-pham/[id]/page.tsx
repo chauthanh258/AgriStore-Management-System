@@ -36,10 +36,10 @@ function ProductDetailContent() {
         Đang tải sản phẩm...
       </main>
     );
-  if (!product)
+  if (!product || !product.isActive)
     return (
       <main className="mx-auto min-h-[600px] max-w-7xl p-20 text-center text-[var(--muted)]">
-        Không tìm thấy sản phẩm.
+        {!product ? "Không tìm thấy sản phẩm." : "Sản phẩm hiện không kinh doanh."}
       </main>
     );
   return (
