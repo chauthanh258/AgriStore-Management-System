@@ -1,15 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AdminModal, IconButton, PageHeader, StatusBadge, DataTable } from "../../../components/admin/admin-ui";
-import { purchaseOrders, suppliers as mockSuppliers } from "../../../data/admin-mock";
+import { products as mockProducts, purchaseOrders, suppliers as mockSuppliers } from "../../../data/admin-mock";
 import { formatCurrency } from "../../../lib/formatters";
-import { getPurchaseOrders } from "../../../services/purchase-orders/purchase-order.service";
+import {
+  createPurchaseOrder,
+  getPurchaseOrder,
+  getPurchaseOrders,
+  updatePurchaseOrder
+} from "../../../services/purchase-orders/purchase-order.service";
+import { getProducts } from "../../../services/products/product.service";
 import { createSupplier, getSuppliers, setSupplierStatus, updateSupplier } from "../../../services/suppliers/supplier.service";
-import type { Supplier, SupplierRequest } from "../../../types/api";
-import type { PurchaseOrderListItem } from "../../../types/purchase-orders";
+import { getWarehouses } from "../../../services/warehouses/warehouse.service";
+import type { Product, Supplier, SupplierRequest, Warehouse } from "../../../types/api";
+import type { PurchaseOrder, PurchaseOrderLineRequest, PurchaseOrderListItem, PurchaseOrderRequest } from "../../../types/purchase-orders";
 import { statusTone } from "../../../components/admin/resource-page";
-import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Power } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2 } from "lucide-react";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 const pageSize = 10;
@@ -37,15 +44,86 @@ const mockSupplierItems: Supplier[] = mockSuppliers.map((supplier) => ({
   isActive: supplier.isActive
 }));
 
-const mockPurchaseOrderItems: PurchaseOrderListItem[] = purchaseOrders.map((order) => ({
-  id: order.id,
-  code: order.code,
-  supplierName: order.supplierName,
-  warehouseName: order.warehouseName,
-  orderDate: order.orderDate,
-  status: order.status,
-  totalAmount: order.totalAmount
+const initialMockPurchaseOrders: PurchaseOrder[] = purchaseOrders.map((order) => ({
+  ...order,
+  expectedDate: null,
+  notes: null,
+  details: order.details.map((detail, index) => {
+    const product = mockProducts.find((item) => item.id === detail.productId);
+    return {
+      id: `${order.id}-detail-${index + 1}`,
+      productId: detail.productId,
+      productCode: product?.code ?? "",
+      productName: detail.productName,
+      quantity: detail.quantity,
+      unitPrice: detail.unitPrice,
+      totalPrice: detail.quantity * detail.unitPrice,
+      receivedQuantity: detail.receivedQuantity
+    };
+  })
 }));
+
+const mockWarehouses: Warehouse[] = [{
+  id: "wh-1",
+  name: "Kho lạnh Đà Lạt",
+  address: "",
+  phone: "",
+  isDefault: true,
+  isActive: true
+}];
+
+type PurchaseOrderFormState = {
+  supplierId: string;
+  warehouseId: string;
+  orderDate: string;
+  expectedDate: string;
+  notes: string;
+  details: PurchaseOrderFormLine[];
+};
+
+type PurchaseOrderFormLine = Omit<PurchaseOrderLineRequest, "unitPrice"> & {
+  unitPrice: string;
+  productLabel?: string;
+};
+
+function getLocalDateInputValue() {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createEmptyPurchaseOrderForm(): PurchaseOrderFormState {
+  return {
+    supplierId: "",
+    warehouseId: "",
+    orderDate: getLocalDateInputValue(),
+    expectedDate: "",
+    notes: "",
+    details: [{ productId: "", quantity: 1, unitPrice: "0" }]
+  };
+}
+
+function toDateInputValue(value?: string | null) {
+  return value ? value.slice(0, 10) : "";
+}
+
+function toPurchaseOrderForm(order: PurchaseOrder): PurchaseOrderFormState {
+  return {
+    supplierId: order.supplierId,
+    warehouseId: order.warehouseId,
+    orderDate: toDateInputValue(order.orderDate),
+    expectedDate: toDateInputValue(order.expectedDate),
+    notes: order.notes ?? "",
+    details: order.details.map((detail) => ({
+      productId: detail.productId,
+      quantity: detail.quantity,
+      unitPrice: String(detail.unitPrice),
+      productLabel: `${detail.productCode} — ${detail.productName}`
+    }))
+  };
+}
 
 function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
@@ -60,6 +138,10 @@ function getStatusLabel(status: string) {
 export default function PurchaseOrdersPage() {
   const [tab, setTab] = useState<"orders" | "suppliers">("orders");
   const [mockSupplierItemsState, setMockSupplierItemsState] = useState<Supplier[]>(mockSupplierItems);
+  const [mockPurchaseOrders, setMockPurchaseOrders] = useState<PurchaseOrder[]>(initialMockPurchaseOrders);
+  const [purchaseOrderSuppliers, setPurchaseOrderSuppliers] = useState<Supplier[]>([]);
+  const [purchaseOrderProducts, setPurchaseOrderProducts] = useState<Product[]>([]);
+  const [purchaseOrderWarehouses, setPurchaseOrderWarehouses] = useState<Warehouse[]>([]);
   const [supplierPage, setSupplierPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [page, setPage] = useState(1);
@@ -79,9 +161,17 @@ export default function PurchaseOrdersPage() {
   } | null>(null);
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
+  const [purchaseOrderModalOpen, setPurchaseOrderModalOpen] = useState(false);
+  const [purchaseOrderLoading, setPurchaseOrderLoading] = useState(false);
+  const [purchaseOrderLoadFailed, setPurchaseOrderLoadFailed] = useState(false);
+  const [savingPurchaseOrder, setSavingPurchaseOrder] = useState(false);
+  const [purchaseOrderError, setPurchaseOrderError] = useState("");
   const [supplierError, setSupplierError] = useState("");
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [editingPurchaseOrderId, setEditingPurchaseOrderId] = useState<string | null>(null);
   const [form, setForm] = useState<SupplierRequest>(emptySupplierForm);
+  const [purchaseOrderForm, setPurchaseOrderForm] = useState<PurchaseOrderFormState>(createEmptyPurchaseOrderForm);
+  const purchaseOrderLoadRequestId = useRef(0);
   const supplierRequestKey = `${supplierPage}:${supplierReloadCount}`;
   const orderRequestKey = `${page}:${statusFilter}:${ordersReloadCount}`;
 
@@ -143,9 +233,19 @@ export default function PurchaseOrdersPage() {
     };
   }, [page, statusFilter, ordersReloadCount, orderRequestKey]);
 
-  const filteredMockOrders = mockPurchaseOrderItems.filter(
-    (order) => !statusFilter || order.status === statusFilter
-  );
+  const filteredMockOrders = mockPurchaseOrders
+    .map((order) => ({
+      id: order.id,
+      code: order.code,
+      supplierName: order.supplierName,
+      warehouseName: order.warehouseName,
+      orderDate: order.orderDate,
+      expectedDate: order.expectedDate,
+      status: order.status,
+      totalAmount: order.totalAmount
+    }))
+    .filter((order) => !statusFilter || order.status === statusFilter)
+    .sort((left, right) => new Date(right.orderDate).getTime() - new Date(left.orderDate).getTime());
   const startIndex = (page - 1) * pageSize;
   const supplierStartIndex = (supplierPage - 1) * supplierPageSize;
   const supplierItems = useMock
@@ -256,13 +356,243 @@ export default function PurchaseOrdersPage() {
     }
   }
 
+  async function openPurchaseOrderForm(orderId?: string) {
+    const requestId = ++purchaseOrderLoadRequestId.current;
+    setEditingPurchaseOrderId(orderId ?? null);
+    setPurchaseOrderForm(createEmptyPurchaseOrderForm());
+    setPurchaseOrderError("");
+    setPurchaseOrderLoadFailed(false);
+    setPurchaseOrderModalOpen(true);
+    setPurchaseOrderLoading(true);
+
+    try {
+      let activeSuppliers: Supplier[];
+      let activeProducts: Product[];
+      let activeWarehouses: Warehouse[];
+      let order: PurchaseOrder | null = null;
+
+      if (useMock) {
+        activeSuppliers = mockSupplierItemsState.filter((supplier) => supplier.isActive);
+        activeProducts = mockProducts.filter((product) => product.isActive);
+        activeWarehouses = mockWarehouses.filter((warehouse) => warehouse.isActive);
+        order = orderId ? mockPurchaseOrders.find((item) => item.id === orderId) ?? null : null;
+      } else {
+        const [supplierFirstPage, productFirstPage, warehouseResult, orderResult] = await Promise.all([
+          getSuppliers({ page: 1, pageSize: 100, isActive: true }),
+          getProducts({ page: 1, pageSize: 100, isActive: true }),
+          getWarehouses(),
+          orderId ? getPurchaseOrder(orderId) : Promise.resolve(null)
+        ]);
+        const [supplierRemainingPages, productRemainingPages] = await Promise.all([
+          Promise.all(Array.from({ length: Math.max(supplierFirstPage.totalPages - 1, 0) }, (_, index) =>
+            getSuppliers({ page: index + 2, pageSize: 100, isActive: true })
+          )),
+          Promise.all(Array.from({ length: Math.max(productFirstPage.totalPages - 1, 0) }, (_, index) =>
+            getProducts({ page: index + 2, pageSize: 100, isActive: true })
+          ))
+        ]);
+        activeSuppliers = [
+          ...supplierFirstPage.items,
+          ...supplierRemainingPages.flatMap((result) => result.items)
+        ];
+        activeProducts = [
+          ...productFirstPage.items,
+          ...productRemainingPages.flatMap((result) => result.items)
+        ];
+        activeWarehouses = warehouseResult.filter((warehouse) => warehouse.isActive);
+        order = orderResult;
+      }
+
+      if (requestId !== purchaseOrderLoadRequestId.current) return;
+      setPurchaseOrderSuppliers(activeSuppliers);
+      setPurchaseOrderProducts(activeProducts);
+      setPurchaseOrderWarehouses(activeWarehouses);
+
+      if (orderId && !order) {
+        throw new Error("Không tìm thấy đơn nhập hàng cần sửa.");
+      }
+      if (order && order.status !== "Draft") {
+        throw new Error("Chỉ có thể sửa đơn nhập hàng ở trạng thái Nháp.");
+      }
+
+      setPurchaseOrderForm(order
+        ? toPurchaseOrderForm(order)
+        : {
+            ...createEmptyPurchaseOrderForm(),
+            supplierId: activeSuppliers[0]?.id ?? "",
+            warehouseId: activeWarehouses.find((warehouse) => warehouse.isDefault)?.id
+              ?? activeWarehouses[0]?.id
+              ?? ""
+          });
+    } catch (loadError: unknown) {
+      if (requestId !== purchaseOrderLoadRequestId.current) return;
+      setPurchaseOrderLoadFailed(true);
+      setPurchaseOrderError(loadError instanceof Error
+        ? loadError.message
+        : "Không thể tải dữ liệu cho biểu mẫu đơn nhập hàng.");
+    } finally {
+      if (requestId === purchaseOrderLoadRequestId.current) {
+        setPurchaseOrderLoading(false);
+      }
+    }
+  }
+
+  function closePurchaseOrderForm(force = false) {
+    if (savingPurchaseOrder && !force) return;
+    purchaseOrderLoadRequestId.current += 1;
+    setPurchaseOrderModalOpen(false);
+    setPurchaseOrderLoading(false);
+    setPurchaseOrderLoadFailed(false);
+    setEditingPurchaseOrderId(null);
+    setPurchaseOrderError("");
+  }
+
+  function updatePurchaseOrderLine(
+    index: number,
+    update: Partial<PurchaseOrderFormLine>
+  ) {
+    setPurchaseOrderForm((current) => ({
+      ...current,
+      details: current.details.map((detail, detailIndex) =>
+        detailIndex === index ? { ...detail, ...update } : detail
+      )
+    }));
+  }
+
+  async function savePurchaseOrder(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setPurchaseOrderError("");
+
+    if (purchaseOrderLoading || purchaseOrderLoadFailed) {
+      setPurchaseOrderError("Tải dữ liệu biểu mẫu chưa thành công. Vui lòng thử tải lại.");
+      return;
+    }
+    if (!purchaseOrderForm.supplierId || !purchaseOrderForm.warehouseId) {
+      setPurchaseOrderError("Vui lòng chọn nhà cung cấp và kho nhận.");
+      return;
+    }
+    if (!purchaseOrderForm.orderDate) {
+      setPurchaseOrderError("Vui lòng chọn ngày đặt hàng.");
+      return;
+    }
+    if (purchaseOrderForm.expectedDate && purchaseOrderForm.expectedDate < purchaseOrderForm.orderDate) {
+      setPurchaseOrderError("Ngày dự kiến nhận không được trước ngày đặt hàng.");
+      return;
+    }
+    if (purchaseOrderForm.details.length === 0) {
+      setPurchaseOrderError("Đơn nhập hàng phải có ít nhất một sản phẩm.");
+      return;
+    }
+    if (purchaseOrderForm.details.some((detail) =>
+      !detail.productId || !Number.isFinite(detail.quantity) || detail.quantity <= 0 ||
+      !detail.unitPrice.trim() || !Number.isFinite(Number(detail.unitPrice)) || Number(detail.unitPrice) < 0
+    )) {
+      setPurchaseOrderError("Mỗi sản phẩm cần có lựa chọn hợp lệ, số lượng lớn hơn 0 và đơn giá không âm.");
+      return;
+    }
+    if (purchaseOrderForm.details.some((detail) =>
+      !purchaseOrderProducts.some((product) => product.id === detail.productId)
+    )) {
+      setPurchaseOrderError("Có sản phẩm đã ngừng hoạt động hoặc không còn khả dụng. Hãy xóa dòng đó hoặc chọn sản phẩm khác.");
+      return;
+    }
+    if (new Set(purchaseOrderForm.details.map((detail) => detail.productId)).size !== purchaseOrderForm.details.length) {
+      setPurchaseOrderError("Không được chọn trùng sản phẩm trong đơn nhập hàng.");
+      return;
+    }
+
+    const request: PurchaseOrderRequest = {
+      supplierId: purchaseOrderForm.supplierId,
+      warehouseId: purchaseOrderForm.warehouseId,
+      orderDate: new Date(`${purchaseOrderForm.orderDate}T00:00:00Z`).toISOString(),
+      expectedDate: purchaseOrderForm.expectedDate
+        ? new Date(`${purchaseOrderForm.expectedDate}T00:00:00Z`).toISOString()
+        : undefined,
+      notes: purchaseOrderForm.notes.trim() || undefined,
+      details: purchaseOrderForm.details.map((detail) => ({
+        productId: detail.productId,
+        quantity: detail.quantity,
+        unitPrice: Number(detail.unitPrice)
+      }))
+    };
+
+    setSavingPurchaseOrder(true);
+    try {
+      if (useMock) {
+        const supplier = purchaseOrderSuppliers.find((item) => item.id === request.supplierId);
+        const warehouse = purchaseOrderWarehouses.find((item) => item.id === request.warehouseId);
+        if (!supplier || !warehouse) {
+          throw new Error("Nhà cung cấp hoặc kho nhận không còn khả dụng.");
+        }
+
+        const currentOrder = editingPurchaseOrderId
+          ? mockPurchaseOrders.find((item) => item.id === editingPurchaseOrderId)
+          : undefined;
+        if (editingPurchaseOrderId && !currentOrder) {
+          throw new Error("Không tìm thấy đơn nhập hàng cần cập nhật.");
+        }
+
+        const details = request.details.map((detail, index) => {
+          const product = purchaseOrderProducts.find((item) => item.id === detail.productId);
+          if (!product) {
+            throw new Error("Một sản phẩm đã chọn không còn khả dụng.");
+          }
+          return {
+            id: `${editingPurchaseOrderId ?? "po-local"}-detail-${Date.now()}-${index}`,
+            productId: detail.productId,
+            productCode: product.code,
+            productName: product.name,
+            quantity: detail.quantity,
+            unitPrice: detail.unitPrice,
+            totalPrice: detail.quantity * detail.unitPrice,
+            receivedQuantity: 0
+          };
+        });
+        const updatedOrder: PurchaseOrder = {
+          id: currentOrder?.id ?? `po-${Date.now()}`,
+          code: currentOrder?.code ?? `PO-LOCAL-${Date.now()}`,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          warehouseId: warehouse.id,
+          warehouseName: warehouse.name,
+          orderDate: request.orderDate,
+          expectedDate: request.expectedDate ?? null,
+          status: "Draft",
+          totalAmount: details.reduce((total, detail) => total + detail.totalPrice, 0),
+          notes: request.notes ?? null,
+          details
+        };
+        setMockPurchaseOrders((current) => currentOrder
+          ? current.map((item) => item.id === updatedOrder.id ? updatedOrder : item)
+          : [...current, updatedOrder]);
+      } else if (editingPurchaseOrderId) {
+        await updatePurchaseOrder(editingPurchaseOrderId, request);
+        setOrdersReloadCount((current) => current + 1);
+      } else {
+        await createPurchaseOrder(request);
+        setPage(1);
+        setOrdersReloadCount((current) => current + 1);
+      }
+
+      closePurchaseOrderForm(true);
+    } catch (saveError: unknown) {
+      setPurchaseOrderError(saveError instanceof Error
+        ? saveError.message
+        : "Không thể lưu đơn nhập hàng.");
+    } finally {
+      setSavingPurchaseOrder(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
         eyebrow="QUẢN TRỊ CHUỖI CUNG ỨNG › NHÀ CUNG CẤP & ĐƠN NHẬP"
         title="Nhà cung cấp & Đơn nhập hàng"
         description="Theo dõi nhà vườn, đơn nhập và nghiệm thu trước khi cộng tồn kho."
-        action={tab === "suppliers" ? <button onClick={openCreateSupplier} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Plus className="h-4 w-4" /> Thêm nhà cung cấp</button> : undefined}
+        action={tab === "suppliers"
+          ? <button onClick={openCreateSupplier} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Plus className="h-4 w-4" /> Thêm nhà cung cấp</button>
+          : <button onClick={() => void openPurchaseOrderForm()} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Plus className="h-4 w-4" /> Tạo đơn nhập hàng</button>}
       />
       <div className="mb-4 flex gap-2 border-b border-[#dfe8dd]">
         <button onClick={() => setTab("orders")} className={`px-4 py-3 text-xs font-bold ${tab === "orders" ? "border-b-2 border-[#006948] text-[#006948]" : "text-[#66736a]"}`}>Đơn nhập hàng</button>
@@ -293,13 +623,18 @@ export default function PurchaseOrdersPage() {
           ) : purchaseOrderItems.length === 0 ? (
             <p className="py-10 text-center text-sm text-[#66736a]">Không có đơn nhập phù hợp với trạng thái đã chọn.</p>
           ) : (
-            <DataTable headers={["Mã PO / ngày tạo", "Nhà cung cấp", "Kho nhận", "Tổng tiền", "Trạng thái"]}>
+            <DataTable headers={["Mã PO / ngày tạo", "Nhà cung cấp", "Kho nhận", "Tổng tiền", "Trạng thái", "Thao tác"]}>
               {purchaseOrderItems.map((order) => <tr className="hover:bg-[#f8fbf7]" key={order.id}>
-                <td className="px-3 py-3"><b>{order.code}</b><small className="block text-[10px] text-[#66736a]">{new Date(order.orderDate).toLocaleDateString("vi-VN")}</small></td>
+                <td className="px-3 py-3"><b>{order.code}</b><small className="block text-[10px] text-[#66736a]">{new Date(order.orderDate).toLocaleDateString("vi-VN", { timeZone: "UTC" })}</small></td>
                 <td className="px-3 py-3">{order.supplierName}</td>
                 <td className="px-3 py-3">{order.warehouseName}</td>
                 <td className="px-3 py-3">{formatCurrency(order.totalAmount)}</td>
                 <td className="px-3 py-3"><StatusBadge tone={statusTone(order.status)}>{getStatusLabel(order.status)}</StatusBadge></td>
+                <td className="px-3 py-3">
+                  {order.status === "Draft"
+                    ? <IconButton label={`Sửa đơn nhập ${order.code}`} onClick={() => void openPurchaseOrderForm(order.id)}><Pencil className="h-4 w-4" /></IconButton>
+                    : <span className="text-[#66736a]">Chỉ xem</span>}
+                </td>
               </tr>)}
             </DataTable>
           )}
@@ -380,6 +715,159 @@ export default function PurchaseOrdersPage() {
           <label className="sm:col-span-2">Địa chỉ<input maxLength={1000} className="mt-1 w-full rounded-lg border p-3" value={form.address ?? ""} onChange={(event) => setForm({ ...form, address: event.target.value })} /></label>
           <label className="sm:col-span-2">Ghi chú<textarea maxLength={2000} className="mt-1 w-full rounded-lg border p-3" rows={3} value={form.notes ?? ""} onChange={(event) => setForm({ ...form, notes: event.target.value })} /></label>
         </form>
+      </AdminModal>}
+      {purchaseOrderModalOpen && <AdminModal
+        title={editingPurchaseOrderId ? "Sửa đơn nhập hàng" : "Tạo đơn nhập hàng"}
+        description="Đơn nháp có thể chỉnh sửa trước khi xác nhận đặt hàng."
+        onClose={() => closePurchaseOrderForm()}
+        footer={<>
+          <button type="button" disabled={savingPurchaseOrder} className="rounded-lg border px-4 py-2 text-xs disabled:opacity-50" onClick={() => closePurchaseOrderForm()}>Hủy</button>
+          <button
+            type="submit"
+            form="purchase-order-form"
+            disabled={purchaseOrderLoading || purchaseOrderLoadFailed || savingPurchaseOrder}
+            className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+          >
+            {savingPurchaseOrder ? "Đang lưu..." : "Lưu đơn nháp"}
+          </button>
+        </>}
+      >
+        {purchaseOrderError && <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">
+          {purchaseOrderError}
+          {purchaseOrderLoadFailed && !purchaseOrderLoading &&
+            <button type="button" className="ml-2 font-bold underline" onClick={() => void openPurchaseOrderForm(editingPurchaseOrderId ?? undefined)}>Thử tải lại</button>}
+        </div>}
+        {purchaseOrderLoading ? (
+          <p className="py-10 text-center text-sm text-[#66736a]">Đang tải nhà cung cấp, sản phẩm và kho...</p>
+        ) : purchaseOrderLoadFailed ? (
+          <p className="py-6 text-center text-sm text-[#66736a]">Chưa thể mở biểu mẫu. Vui lòng tải lại dữ liệu.</p>
+        ) : (
+          <form id="purchase-order-form" onSubmit={(event) => void savePurchaseOrder(event)}>
+            <fieldset disabled={savingPurchaseOrder} className="min-w-0 space-y-5 text-xs">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="font-semibold text-[#536156]">Nhà cung cấp
+                <select required className="mt-1 w-full rounded-lg border p-3 font-normal" value={purchaseOrderForm.supplierId} onChange={(event) => setPurchaseOrderForm((current) => ({ ...current, supplierId: event.target.value }))}>
+                  <option value="">Chọn nhà cung cấp</option>
+                  {purchaseOrderSuppliers.map((supplier) => <option key={supplier.id} value={supplier.id}>{supplier.code} — {supplier.name}</option>)}
+                </select>
+              </label>
+              <label className="font-semibold text-[#536156]">Kho nhận
+                <select required className="mt-1 w-full rounded-lg border p-3 font-normal" value={purchaseOrderForm.warehouseId} onChange={(event) => setPurchaseOrderForm((current) => ({ ...current, warehouseId: event.target.value }))}>
+                  <option value="">Chọn kho nhận</option>
+                  {purchaseOrderWarehouses.map((warehouse) => <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>)}
+                </select>
+              </label>
+              <label className="font-semibold text-[#536156]">Ngày đặt
+                <input required type="date" className="mt-1 w-full rounded-lg border p-3 font-normal" value={purchaseOrderForm.orderDate} onChange={(event) => setPurchaseOrderForm((current) => ({ ...current, orderDate: event.target.value }))} />
+              </label>
+              <label className="font-semibold text-[#536156]">Ngày dự kiến nhận
+                <input type="date" min={purchaseOrderForm.orderDate} className="mt-1 w-full rounded-lg border p-3 font-normal" value={purchaseOrderForm.expectedDate} onChange={(event) => setPurchaseOrderForm((current) => ({ ...current, expectedDate: event.target.value }))} />
+              </label>
+            </div>
+
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="font-bold text-[#1c2a20]">Sản phẩm nhập</h3>
+                <button
+                  type="button"
+                  disabled={purchaseOrderProducts.length === 0}
+                  onClick={() => setPurchaseOrderForm((current) => ({
+                    ...current,
+                    details: [...current.details, { productId: "", quantity: 1, unitPrice: "0" }]
+                  }))}
+                  className="flex items-center gap-1 rounded-lg border border-[#dfe8dd] px-3 py-2 font-semibold text-[#006948] disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" /> Thêm sản phẩm
+                </button>
+              </div>
+              {purchaseOrderProducts.length === 0 && purchaseOrderForm.details.length === 0 ? (
+                <p className="rounded-lg bg-amber-50 p-3 text-amber-800">Không có sản phẩm đang hoạt động để thêm vào đơn.</p>
+              ) : (
+                <div className="space-y-3">
+                  {purchaseOrderForm.details.map((detail, index) => {
+                    const selectedProduct = purchaseOrderProducts.find((product) => product.id === detail.productId);
+                    const productUnavailable = Boolean(detail.productId && !selectedProduct);
+                    const lineTotal = detail.quantity * Number(detail.unitPrice);
+                    return <div key={`po-line-${index}`} className="grid gap-3 rounded-xl border border-[#e7eee4] bg-[#fbfdf9] p-3 sm:grid-cols-12 sm:items-end">
+                      <label className="font-semibold text-[#536156] sm:col-span-5">Sản phẩm
+                        <select
+                          required
+                          className="mt-1 w-full rounded-lg border bg-white p-3 font-normal"
+                          value={detail.productId}
+                          onChange={(event) => {
+                            const product = purchaseOrderProducts.find((item) => item.id === event.target.value);
+                            updatePurchaseOrderLine(index, {
+                              productId: event.target.value,
+                              unitPrice: String(product?.costPrice ?? 0),
+                              productLabel: product ? `${product.code} — ${product.name}` : undefined
+                            });
+                          }}
+                        >
+                          <option value="">Chọn sản phẩm</option>
+                          {productUnavailable && <option value={detail.productId}>{detail.productLabel ?? "Sản phẩm không còn hoạt động"} (không khả dụng)</option>}
+                          {purchaseOrderProducts.map((product) => {
+                            const usedInAnotherLine = purchaseOrderForm.details.some((line, lineIndex) =>
+                              lineIndex !== index && line.productId === product.id
+                            );
+                            return <option key={product.id} value={product.id} disabled={usedInAnotherLine}>
+                              {product.code} — {product.name} ({product.unitName})
+                            </option>;
+                          })}
+                        </select>
+                        {productUnavailable && <span className="mt-1 block font-normal text-amber-700">Sản phẩm không còn hoạt động; hãy xóa dòng hoặc chọn sản phẩm khác.</span>}
+                      </label>
+                      <label className="font-semibold text-[#536156] sm:col-span-2">Số lượng
+                        <input
+                          required
+                          type="number"
+                          min="0.001"
+                          step="0.001"
+                          className="mt-1 w-full rounded-lg border bg-white p-3 font-normal"
+                          value={detail.quantity}
+                          onChange={(event) => updatePurchaseOrderLine(index, { quantity: Number(event.target.value) })}
+                        />
+                      </label>
+                      <label className="font-semibold text-[#536156] sm:col-span-2">Đơn giá
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="mt-1 w-full rounded-lg border bg-white p-3 font-normal"
+                          value={detail.unitPrice}
+                          onChange={(event) => updatePurchaseOrderLine(index, { unitPrice: event.target.value })}
+                        />
+                      </label>
+                      <div className="sm:col-span-2">
+                        <span className="block font-semibold text-[#536156]">Thành tiền</span>
+                        <span className="mt-1 block rounded-lg bg-white p-3 font-bold">{formatCurrency(Number.isFinite(lineTotal) ? lineTotal : 0)}</span>
+                      </div>
+                      <div className="flex justify-end sm:col-span-1">
+                        <IconButton label={`Xóa dòng sản phẩm ${selectedProduct?.name ?? index + 1}`} tone="danger" onClick={() => setPurchaseOrderForm((current) => ({
+                          ...current,
+                          details: current.details.filter((_, detailIndex) => detailIndex !== index)
+                        }))}>
+                          <Trash2 className="h-4 w-4" />
+                        </IconButton>
+                      </div>
+                    </div>;
+                  })}
+                </div>
+              )}
+              <div className="flex justify-end border-t border-[#e7eee4] pt-3 text-sm font-bold">
+                Tổng đơn: {formatCurrency(purchaseOrderForm.details.reduce(
+                  (total, detail) => total + detail.quantity * Number(detail.unitPrice),
+                  0
+                ))}
+              </div>
+            </section>
+
+            <label className="block font-semibold text-[#536156]">Ghi chú
+              <textarea maxLength={2000} rows={3} className="mt-1 w-full rounded-lg border p-3 font-normal" value={purchaseOrderForm.notes} onChange={(event) => setPurchaseOrderForm((current) => ({ ...current, notes: event.target.value }))} />
+            </label>
+            </fieldset>
+          </form>
+        )}
       </AdminModal>}
     </>
   );
