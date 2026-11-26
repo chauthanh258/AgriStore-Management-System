@@ -1,4 +1,5 @@
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.Data;
 using AgriStore.Api.DTOs.Roles;
 using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Identity;
@@ -8,7 +9,8 @@ namespace AgriStore.Api.Services;
 
 public sealed class RoleService(
     RoleManager<ApplicationRole> roleManager,
-    UserManager<ApplicationUser> userManager) : IRoleService
+    UserManager<ApplicationUser> userManager,
+    ApplicationDbContext dbContext) : IRoleService
 {
     public async Task<IReadOnlyCollection<RoleResponse>> GetAllAsync(CancellationToken cancellationToken)
     {
@@ -127,6 +129,106 @@ public sealed class RoleService(
         return RoleServiceResult<bool>.Success(true);
     }
 
+    public async Task<IReadOnlyCollection<PermissionResponse>> GetPermissionsAsync(
+        CancellationToken cancellationToken)
+    {
+        return await dbContext.Permissions
+            .OrderBy(permission => permission.Module)
+            .ThenBy(permission => permission.Action)
+            .Select(permission => new PermissionResponse(
+                permission.Code,
+                permission.Name,
+                permission.Description,
+                permission.Module,
+                permission.Action))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<RoleServiceResult<RolePermissionsResponse>> GetPermissionsForRoleAsync(
+        Guid roleId,
+        CancellationToken cancellationToken)
+    {
+        var role = await roleManager.FindByIdAsync(roleId.ToString());
+        if (role is null)
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(404, "Không tìm thấy role.");
+        }
+
+        var permissionCodes = await dbContext.RolePermissions
+            .Where(rolePermission => rolePermission.RoleId == roleId)
+            .OrderBy(rolePermission => rolePermission.PermissionCode)
+            .Select(rolePermission => rolePermission.PermissionCode)
+            .ToListAsync(cancellationToken);
+
+        return RoleServiceResult<RolePermissionsResponse>.Success(MapRolePermissions(role, permissionCodes));
+    }
+
+    public async Task<RoleServiceResult<RolePermissionsResponse>> ReplacePermissionsAsync(
+        Guid roleId,
+        IReadOnlyCollection<string> permissionCodes,
+        CancellationToken cancellationToken)
+    {
+        var role = await roleManager.FindByIdAsync(roleId.ToString());
+        if (role is null)
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(404, "Không tìm thấy role.");
+        }
+
+        if (string.Equals(role.Name, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase))
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(
+                403,
+                "Role Admin có toàn quyền và không cần gán permission.");
+        }
+
+        var normalizedCodes = permissionCodes
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+        if (normalizedCodes.Contains(PermissionCatalog.AssignRolePermissionsCode, StringComparer.Ordinal))
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(
+                403,
+                "Chỉ Admin mới được quyền gán permission cho role.");
+        }
+
+        if (normalizedCodes.Length != permissionCodes.Count)
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(
+                400,
+                "Danh sách permission chứa mã rỗng hoặc trùng lặp.");
+        }
+
+        var validCodes = await dbContext.Permissions
+            .Where(permission => normalizedCodes.Contains(permission.Code))
+            .Select(permission => permission.Code)
+            .ToListAsync(cancellationToken);
+        if (validCodes.Count != normalizedCodes.Length)
+        {
+            return RoleServiceResult<RolePermissionsResponse>.Failure(
+                400,
+                "Danh sách chứa permission không tồn tại.");
+        }
+
+        var current = await dbContext.RolePermissions
+            .Where(rolePermission => rolePermission.RoleId == roleId)
+            .ToListAsync(cancellationToken);
+        var requestedCodeSet = normalizedCodes.ToHashSet(StringComparer.Ordinal);
+        var currentCodeSet = current
+            .Select(rolePermission => rolePermission.PermissionCode)
+            .ToHashSet(StringComparer.Ordinal);
+        dbContext.RolePermissions.RemoveRange(current.Where(rolePermission =>
+            !requestedCodeSet.Contains(rolePermission.PermissionCode)));
+        dbContext.RolePermissions.AddRange(normalizedCodes
+            .Where(code => !currentCodeSet.Contains(code))
+            .Select(code =>
+                new RolePermission { RoleId = roleId, PermissionCode = code }));
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return RoleServiceResult<RolePermissionsResponse>.Success(MapRolePermissions(role, normalizedCodes));
+    }
+
     private async Task<IReadOnlyCollection<RoleResponse>> MapRolesAsync(
         IEnumerable<ApplicationRole> roles,
         CancellationToken cancellationToken)
@@ -152,6 +254,16 @@ public sealed class RoleService(
             userCount,
             SystemRoles.Protected.Contains(role.Name ?? string.Empty));
     }
+
+    private static RolePermissionsResponse MapRolePermissions(
+        ApplicationRole role,
+        IReadOnlyCollection<string> permissionCodes) =>
+        new(
+            role.Id,
+            role.Name!,
+            permissionCodes,
+            SystemRoles.Protected.Contains(role.Name ?? string.Empty),
+            string.Equals(role.Name, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase));
 
     private static string? NormalizeName(string? name) =>
         string.IsNullOrWhiteSpace(name) ? null : name.Trim();

@@ -7,6 +7,7 @@ import { formatCurrency } from "../../../lib/formatters";
 import { createSupplier, getSuppliers } from "../../../services/suppliers/supplier.service";
 import type { Supplier, SupplierRequest } from "../../../types/api";
 import { statusTone } from "../../../components/admin/resource-page";
+import { Plus, ArrowRight } from "lucide-react";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 
@@ -59,7 +60,7 @@ export default function PurchaseOrdersPage() {
         eyebrow="QUẢN TRỊ CHUỖI CUNG ỨNG › NHÀ CUNG CẤP & ĐƠN NHẬP"
         title="Nhà cung cấp & Đơn nhập hàng"
         description="Theo dõi nhà vườn, đơn nhập và nghiệm thu trước khi cộng tồn kho."
-        action={tab === "orders" ? <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">＋ Tạo Đơn Nhập Hàng (F1)</button> : <button onClick={() => { setError(""); setModalOpen(true); }} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">＋ Thêm nhà cung cấp</button>}
+        action={tab === "orders" ? <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Plus className="h-4 w-4" /> Tạo Đơn Nhập Hàng (F1)</button> : <button onClick={() => { setError(""); setModalOpen(true); }} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white flex items-center gap-1"><Plus className="h-4 w-4" /> Thêm nhà cung cấp</button>}
       />
       {error && <div className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">{error}</div>}
       <div className="mb-4 flex gap-2 border-b border-[#dfe8dd]">
@@ -76,7 +77,7 @@ export default function PurchaseOrdersPage() {
       ) : (
         <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
           <DataTable headers={["Mã", "Nhà cung cấp", "Người liên hệ", "Điện thoại", "Trạng thái", "Thao tác"]}>
-            {supplierItems.map((supplier) => <tr className="hover:bg-[#f8fbf7]" key={supplier.id}><td className="px-3 py-3 font-semibold">{supplier.code}</td><td className="px-3 py-3">{supplier.name}</td><td className="px-3 py-3">{supplier.contactPerson ?? "—"}</td><td className="px-3 py-3">{supplier.phone ?? "—"}</td><td className="px-3 py-3"><StatusBadge>{supplier.isActive ? "Đang hoạt động" : "Tạm khóa"}</StatusBadge></td><td className="px-3 py-3"><IconButton label={`Xem ${supplier.name}`}>→</IconButton></td></tr>)}
+            {supplierItems.map((supplier) => <tr className="hover:bg-[#f8fbf7]" key={supplier.id}><td className="px-3 py-3 font-semibold">{supplier.code}</td><td className="px-3 py-3">{supplier.name}</td><td className="px-3 py-3">{supplier.contactPerson ?? "—"}</td><td className="px-3 py-3">{supplier.phone ?? "—"}</td><td className="px-3 py-3"><StatusBadge>{supplier.isActive ? "Đang hoạt động" : "Tạm khóa"}</StatusBadge></td><td className="px-3 py-3"><IconButton label={`Xem ${supplier.name}`}><ArrowRight className="h-4 w-4" /></IconButton></td></tr>)}
           </DataTable>
         </div>
       )}

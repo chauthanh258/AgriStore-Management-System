@@ -8,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/customers")]
-[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageCustomers)]
 public sealed class CustomersController(ICustomerService customerService) : ControllerBase
 {
     [HttpGet]

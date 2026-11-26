@@ -37,7 +37,7 @@ dotnet ef database update --project Backend/AgriStore.Api --startup-project Back
 dotnet run --project Backend/AgriStore.Api
 ```
 
-Migration `AddCommerceSchema` tạo 24 bảng nghiệp vụ theo `DATABASE_TABLE` và dữ liệu mẫu cho danh mục, sản phẩm, kho, nhập hàng, khách hàng, đơn hàng, thanh toán, giao hàng, coupon, review và audit log.
+Migration `AddCommerceSchema` tạo 26 bảng nghiệp vụ theo `DATABASE_TABLE` và dữ liệu mẫu cho danh mục, sản phẩm, kho, nhập hàng, khách hàng, đơn hàng, thanh toán, giao hàng, coupon, review và audit log.
 
 Khi API khởi động, hệ thống tự động seed bốn role và bốn tài khoản development:
 

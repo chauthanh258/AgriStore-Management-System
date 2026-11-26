@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { DataTable, PageHeader, StatusBadge } from "./admin-ui";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 type Row = { id: string; search?: string; status?: string };
 export function ResourcePage({
@@ -79,19 +80,19 @@ export function ResourcePage({
         </DataTable>
         <div className="mt-4 flex justify-end gap-2 text-xs">
           <button
-            className="rounded border px-3 py-1"
+            className="rounded border px-3 py-1 flex items-center"
             onClick={() => setPage(Math.max(1, page - 1))}
           >
-            ‹
+            <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="rounded bg-[#006948] px-3 py-1 text-white">
             {page}
           </span>
           <button
-            className="rounded border px-3 py-1"
+            className="rounded border px-3 py-1 flex items-center"
             onClick={() => setPage(page + 1)}
           >
-            ›
+            <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>

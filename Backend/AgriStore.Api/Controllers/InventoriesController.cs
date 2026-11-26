@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 [Route("api/inventories")]
 public sealed class InventoriesController(IInventoryService inventoryService) : ControllerBase
 {

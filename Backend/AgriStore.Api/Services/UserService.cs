@@ -79,11 +79,6 @@ public sealed class UserService(
             return UserServiceResult<UserResponse>.Failure(403, "Manager không được cập nhật tài khoản Admin.");
         }
 
-        if (request.Roles is not null && !actorIsAdmin)
-        {
-            return UserServiceResult<UserResponse>.Failure(403, "Chỉ Admin được thay đổi role của user.");
-        }
-
         var requestedRoles = request.Roles is null
             ? targetRoles.ToArray()
             : request.Roles
@@ -331,6 +326,15 @@ public sealed class UserService(
         if (currentRoles.Count <= 1)
         {
             return UserServiceResult<UserRolesResponse>.Failure(400, "Không thể xóa role cuối cùng của user.");
+        }
+
+        var requestedRoles = currentRoles
+            .Where(item => !string.Equals(item, currentRole, StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+        var validation = await ValidateRoleChangeAsync(user, requestedRoles, actorRoles);
+        if (validation is not null)
+        {
+            return validation;
         }
 
         if (string.Equals(role.Name, SystemRoles.Admin, StringComparison.OrdinalIgnoreCase) &&

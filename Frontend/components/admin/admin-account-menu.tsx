@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../providers/auth-provider";
+import { ChevronUp, ChevronDown, User, LogOut } from "lucide-react";
 
 function initials(name: string) {
   return (
@@ -60,7 +61,7 @@ export function AdminAccountMenu() {
           <b className="block truncate">{session.fullName}</b>
           <small className="text-[#006948]">{session.roles.join(" · ")}</small>
         </span>
-        <span className="text-[10px] text-[#66736a]">{open ? "⌃" : "⌄"}</span>
+        <span className="text-[10px] text-[#66736a]">{open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</span>
       </button>
       {open && (
         <div
@@ -83,20 +84,24 @@ export function AdminAccountMenu() {
               role="menuitem"
               href="/admin/thong-tin-ca-nhan"
               onClick={() => setOpen(false)}
-              className="block rounded-lg px-3 py-3 text-xs hover:bg-[#f1f5ee]"
+              className="block rounded-lg px-3 py-3 text-xs hover:bg-[#f1f5ee] flex items-center gap-2"
             >
-              <b className="block">♙ Thông tin cá nhân</b>
-              <small className="text-[#7a857c]">
-                Hồ sơ và bảo mật tài khoản
-              </small>
+              <User className="h-4 w-4" />
+              <span>
+                <b className="block">Thông tin cá nhân</b>
+                <small className="text-[#7a857c]">
+                  Hồ sơ và bảo mật tài khoản
+                </small>
+              </span>
             </Link>
             <button
               role="menuitem"
               type="button"
               onClick={() => void handleLogout()}
-              className="mt-1 w-full border-t border-[#edf2ea] px-3 py-3 text-left text-xs text-red-600 hover:bg-red-50"
+              className="mt-1 w-full border-t border-[#edf2ea] px-3 py-3 text-left text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
             >
-              ⇥　<b>Đăng xuất</b>
+              <LogOut className="h-4 w-4" />
+              <b>Đăng xuất</b>
             </button>
           </div>
         </div>

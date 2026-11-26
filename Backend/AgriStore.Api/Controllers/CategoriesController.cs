@@ -8,7 +8,6 @@ namespace AgriStore.Api.Controllers;
 
 /// <summary>API quản lý danh mục sản phẩm.</summary>
 [ApiController]
-// [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
 [Route("api/categories")]
 public sealed class CategoriesController(ICategoryService categoryService) : ControllerBase
 {
@@ -34,6 +33,7 @@ public sealed class CategoriesController(ICategoryService categoryService) : Con
 
     /// <summary>Thêm mới danh mục.</summary>
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -49,6 +49,7 @@ public sealed class CategoriesController(ICategoryService categoryService) : Con
 
     /// <summary>Cập nhật thông tin danh mục.</summary>
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -64,6 +65,7 @@ public sealed class CategoriesController(ICategoryService categoryService) : Con
 
     /// <summary>Thay đổi trạng thái hoạt động của danh mục.</summary>
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -78,6 +80,7 @@ public sealed class CategoriesController(ICategoryService categoryService) : Con
 
     /// <summary>Xóa mềm danh mục bằng cách chuyển trạng thái hoạt động về false.</summary>
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
     [ProducesResponseType(typeof(CategoryResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]

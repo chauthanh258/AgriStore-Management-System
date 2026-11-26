@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ViewReports)]
 [Route("api/reports")]
 public sealed class ReportsController(IReportService reportService) : ControllerBase
 {
