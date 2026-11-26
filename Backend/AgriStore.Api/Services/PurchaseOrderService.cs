@@ -8,6 +8,54 @@ namespace AgriStore.Api.Services;
 
 public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurchaseOrderService
 {
+    private const int MaxPageSize = 100;
+
+    public async Task<PurchaseOrderListResponse> GetPagedAsync(
+        PurchaseOrderListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
+        var ordersQuery = dbContext.PurchaseOrders.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            var status = query.Status.Trim();
+            ordersQuery = ordersQuery.Where(order => order.Status == status);
+        }
+
+        var totalCount = await ordersQuery.CountAsync(cancellationToken);
+        var skip = ((long)page - 1) * pageSize;
+        var items = skip > int.MaxValue
+            ? []
+            : await (
+                from order in ordersQuery
+                join supplier in dbContext.Suppliers.AsNoTracking()
+                    on order.SupplierId equals supplier.Id
+                join warehouse in dbContext.Warehouses.AsNoTracking()
+                    on order.WarehouseId equals warehouse.Id
+                orderby order.OrderDate descending, order.Id descending
+                select new PurchaseOrderListItemResponse(
+                    order.Id,
+                    order.Code,
+                    supplier.Name,
+                    warehouse.Name,
+                    order.OrderDate,
+                    order.ExpectedDate,
+                    order.Status,
+                    order.TotalAmount))
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+        return new PurchaseOrderListResponse(
+            items,
+            page,
+            pageSize,
+            totalCount,
+            (int)Math.Ceiling(totalCount / (double)pageSize));
+    }
+
     public async Task<PurchaseOrderResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
         var order = await dbContext.PurchaseOrders

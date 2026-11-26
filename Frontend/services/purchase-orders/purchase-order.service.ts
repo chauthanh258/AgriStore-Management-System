@@ -2,9 +2,15 @@ import apiClient from "../../lib/axios/client";
 import type {
   PurchaseOrder,
   PurchaseOrderLineRequest,
+  PurchaseOrderListResponse,
   PurchaseOrderRequest,
   ReceivePurchaseOrderRequest
 } from "../../types/purchase-orders";
+
+export async function getPurchaseOrders(params: { page?: number; pageSize?: number; status?: string } = {}) {
+  const response = await apiClient.get<PurchaseOrderListResponse>("/api/purchase-orders", { params });
+  return response.data;
+}
 
 export async function getPurchaseOrder(id: string) {
   const response = await apiClient.get<PurchaseOrder>(`/api/purchase-orders/${id}`);
