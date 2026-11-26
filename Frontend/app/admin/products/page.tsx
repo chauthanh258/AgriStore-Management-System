@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import {
   categories as mockCategories
@@ -26,9 +27,10 @@ import {
   StatusBadge
 } from "../../../components/admin/admin-ui";
 import Image from "next/image";
-import { Plus, Edit, Trash2, Pause, Play, X } from "lucide-react";
+import { Plus, Edit, Trash2, Pause, Play, X, Eye } from "lucide-react";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
+const productPageSize = 10;
 const emptyProduct: ProductRequest = {
   code: "",
   name: "",
@@ -67,6 +69,51 @@ function categoryName(id: string, all: Category[]) {
   return all.find((item) => item.id === id)?.name ?? "";
 }
 
+function getCategoryTreeRows(categories: Category[]) {
+  const sorted = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
+  const childrenByParent = new Map<string, Category[]>();
+  for (const category of sorted) {
+    const parentKey = category.parentId ?? "";
+    const children = childrenByParent.get(parentKey) ?? [];
+    children.push(category);
+    childrenByParent.set(parentKey, children);
+  }
+
+  const rows: Array<{ category: Category; depth: number }> = [];
+  const visited = new Set<string>();
+  function visit(items: Category[], depth: number, ancestors: Set<string>) {
+    for (const category of items) {
+      if (ancestors.has(category.id) || visited.has(category.id)) continue;
+      visited.add(category.id);
+      rows.push({ category, depth });
+      const nextAncestors = new Set(ancestors);
+      nextAncestors.add(category.id);
+      visit(childrenByParent.get(category.id) ?? [], depth + 1, nextAncestors);
+    }
+  }
+
+  visit(childrenByParent.get("") ?? [], 0, new Set());
+  for (const category of sorted) {
+    if (!visited.has(category.id)) visit([category], 0, new Set());
+  }
+  return rows;
+}
+
+function getCategoryDescendantIds(categoryId: string, categories: Category[]) {
+  const descendants = new Set<string>();
+  const pending = [categoryId];
+  while (pending.length) {
+    const parentId = pending.pop()!;
+    for (const category of categories) {
+      if (category.parentId === parentId && !descendants.has(category.id)) {
+        descendants.add(category.id);
+        pending.push(category.id);
+      }
+    }
+  }
+  return descendants;
+}
+
 export default function ProductsAdminPage() {
   const [tab, setTab] = useState<"categories" | "products" | "units">("products");
   const [categories, setCategories] = useState<Category[]>(mockCategories);
@@ -74,6 +121,9 @@ export default function ProductsAdminPage() {
   const [units, setUnits] = useState<Unit[]>([]);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [productModal, setProductModal] = useState(false);
@@ -94,23 +144,32 @@ export default function ProductsAdminPage() {
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newMainIndex, setNewMainIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const productRequestId = useRef(0);
 
-  const loadProducts = useCallback(async (search = "") => {
+  const loadProducts = useCallback(async (
+    search: string,
+    requestedPage: number,
+    requestedStatus: string
+  ) => {
+    const requestId = ++productRequestId.current;
     setLoading(true);
     try {
-      setProducts(
-        (
-          await productRepository.getProducts({
-            page: 1,
-            pageSize: 100,
-            search
-          })
-        ).items
-      );
+      const result = await productRepository.getProducts({
+        page: requestedPage,
+        pageSize: productPageSize,
+        search: search.trim() || undefined,
+        isActive: requestedStatus === "all" ? undefined : requestedStatus === "active"
+      });
+      if (requestId !== productRequestId.current) return;
+      const lastPage = Math.max(result.totalPages, 1);
+      setProducts(result.items);
+      setTotalCount(result.totalCount);
+      setTotalPages(lastPage);
+      if (requestedPage > lastPage) setPage(lastPage);
     } catch (loadError) {
-      setError(errorMessage(loadError));
+      if (requestId === productRequestId.current) setError(errorMessage(loadError));
     } finally {
-      setLoading(false);
+      if (requestId === productRequestId.current) setLoading(false);
     }
   }, []);
 
@@ -124,7 +183,6 @@ export default function ProductsAdminPage() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      void loadProducts();
       void loadCategories();
       if (!useMock)
         void unitRepository.getUnits()
@@ -134,17 +192,19 @@ export default function ProductsAdminPage() {
         void unitRepository.getUnits().then((result) => setUnits(result.items));
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [loadProducts, loadCategories]);
+  }, [loadCategories]);
 
-  const filteredProducts = useMemo(
-    () =>
-      products.filter(
-        (item) =>
-          status === "all" ||
-          (status === "active" ? item.isActive : !item.isActive)
-      ),
-    [products, status]
-  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadProducts(query, page, status);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [loadProducts, page, query, status]);
+
+  const categoryRows = useMemo(() => getCategoryTreeRows(categories), [categories]);
+  const excludedCategoryParents = editingCategory
+    ? getCategoryDescendantIds(editingCategory.id, categories)
+    : new Set<string>();
 
   function openCreateProduct() {
     setEditingProduct(null);
@@ -289,7 +349,9 @@ export default function ProductsAdminPage() {
         );
       }
       setProductModal(false);
-      await loadProducts();
+      const nextPage = editingProduct ? page : 1;
+      if (!editingProduct) setPage(1);
+      await loadProducts(query, nextPage, status);
     } catch (submitError) {
       setError(errorMessage(submitError));
     } finally {
@@ -428,13 +490,16 @@ export default function ProductsAdminPage() {
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
-                void loadProducts(event.target.value);
+                setPage(1);
               }}
             />
             <select
               className="rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs"
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              onChange={(event) => {
+                setStatus(event.target.value);
+                setPage(1);
+              }}
             >
               <option value="all">Tất cả trạng thái</option>
               <option value="active">Đang bán</option>
@@ -444,7 +509,7 @@ export default function ProductsAdminPage() {
           <div className="rounded-xl border border-[#dfe8dd] bg-white p-4">
             <div className="mb-3 text-xs text-[#66736a]">
               Danh sách{" "}
-              <b className="text-[#006948]">{filteredProducts.length}</b>
+              <b className="text-[#006948]">{totalCount}</b>
             </div>
             <DataTable
               headers={[
@@ -464,20 +529,26 @@ export default function ProductsAdminPage() {
                   </td>
                 </tr>
               ) : (
-                filteredProducts.map((product) => (
+                products.map((product) => (
                   <tr className="hover:bg-[#f8fbf7]" key={product.id}>
                     <td className="px-3 py-3">
                       <div className="flex items-center gap-2">
                         {product.mainImageUrl && (
                           <Image
-                            // src={product.mainImageUrl}
+                            src={product.mainImageUrl}
                             alt=""
                             width={40}
                             height={40}
+                            unoptimized
                             className="h-10 w-10 rounded object-cover"
                           />
                         )}
-                        <b>{product.name}</b>
+                        <Link
+                          href={`/admin/products/${product.id}`}
+                          className="font-semibold hover:text-[#006948] hover:underline"
+                        >
+                          {product.name}
+                        </Link>
                       </div>
                     </td>
                     <td className="px-3 py-3">{product.code}</td>
@@ -496,6 +567,13 @@ export default function ProductsAdminPage() {
                       </StatusBadge>
                     </td>
                     <td className="px-3 py-3">
+                      <Link
+                        href={`/admin/products/${product.id}`}
+                        aria-label={`Chi tiết ${product.name}`}
+                        className="inline-flex rounded-lg p-2 text-[#536156] hover:bg-[#eff7ed] hover:text-[#006948]"
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Link>{" "}
                       <IconButton
                         label={`Sửa ${product.name}`}
                         onClick={() => void openEditProduct(product)}
@@ -509,7 +587,11 @@ export default function ProductsAdminPage() {
                           if (window.confirm(`Xóa sản phẩm "${product.name}"?`))
                             void productRepository
                               .deleteProduct(product.id)
-                              .then(() => loadProducts())
+                              .then(() => {
+                                const nextPage = products.length === 1 && page > 1 ? page - 1 : page;
+                                setPage(nextPage);
+                                return loadProducts(query, nextPage, status);
+                              })
                               .catch((actionError) =>
                                 setError(errorMessage(actionError))
                               );
@@ -522,6 +604,27 @@ export default function ProductsAdminPage() {
                 ))
               )}
             </DataTable>
+            {!loading && totalCount > 0 && (
+              <div className="mt-4 flex items-center justify-between gap-3 text-xs text-[#66736a]">
+                <span>Trang {page} / {totalPages} · {totalCount} sản phẩm</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    disabled={page <= 1}
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    className="rounded-lg border border-[#dfe8dd] px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Trước
+                  </button>
+                  <button
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                    className="rounded-lg border border-[#dfe8dd] px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Sau
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : tab === "categories" ? (
@@ -536,12 +639,13 @@ export default function ProductsAdminPage() {
               "Thao tác"
             ]}
           >
-            {[...categories]
-              .sort((a, b) => a.sortOrder - b.sortOrder)
-              .map((category) => (
+            {categoryRows.map(({ category, depth }) => (
                 <tr key={category.id} className="hover:bg-[#f8fbf7]">
                   <td className="px-3 py-3">
-                    <b>{category.name}</b>
+                    <div className="flex items-center" style={{ paddingLeft: depth * 20 }}>
+                      {depth > 0 && <span aria-hidden="true" className="mr-2 text-[#91a399]">↳</span>}
+                      <b>{category.name}</b>
+                    </div>
                     <div className="text-xs text-gray-500">
                       {category.description}
                     </div>
@@ -965,7 +1069,10 @@ export default function ProductsAdminPage() {
               >
                 <option value="">Không có danh mục cha</option>
                 {categories
-                  .filter((item) => item.id !== editingCategory?.id)
+                  .filter((item) =>
+                    item.id !== editingCategory?.id &&
+                    !excludedCategoryParents.has(item.id)
+                  )
                   .map((category) => (
                     <option key={category.id} value={category.id}>
                       {category.name}

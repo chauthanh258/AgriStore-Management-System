@@ -1,330 +1,270 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { PageHeader, Panel, StatusBadge } from "../../../components/admin/admin-ui";
+import { productRepository } from "../../../services/products/product.repository";
 import {
-  KpiGrid,
-  PageHeader,
-  Panel,
-  StatusBadge
-} from "../../../components/admin/admin-ui";
-import { reviews } from "../../../data/admin-mock";
-import { formatCurrency } from "../../../lib/formatters";
-import Image from "next/image";
-import { Download, Settings, Check, Search, Image as ImageIcon, AlertTriangle, Reply, RotateCcw, Ban, Play } from "lucide-react";
+  deleteProductReview,
+  getProductReviews,
+  setProductReviewApproval
+} from "../../../services/reviews/review.service";
+import type { Product, ProductReview } from "../../../types/api";
 
-const stars = (rating: number) => "★".repeat(rating) + "☆".repeat(5 - rating);
+const pageSize = 20;
+type ReviewFilter = "all" | "pending" | "approved";
+
+function getErrorMessage(error: unknown) {
+  const response = (error as { response?: { data?: { detail?: string } } }).response;
+  return response?.data?.detail ??
+    (error instanceof Error ? error.message : "Không thể thực hiện yêu cầu.");
+}
 
 export default function ReviewsPage() {
-  const [selectedId, setSelectedId] = useState(reviews[0].id);
-  const [filter, setFilter] = useState<
-    "all" | "pending" | "approved" | "flagged"
-  >("all");
-  const [items, setItems] = useState(reviews);
-  const selected = items.find((review) => review.id === selectedId) ?? items[0];
-  const filtered = useMemo(
-    () =>
-      items.filter(
-        (review) =>
-          filter === "all" ||
-          (filter === "pending" && !review.isApproved) ||
-          (filter === "approved" && review.isApproved) ||
-          (filter === "flagged" && review.isFlagged)
-      ),
-    [filter, items]
-  );
-  const approve = (isApproved: boolean) => {
-    if (!selected) return;
-    setItems((current) =>
-      current.map((review) =>
-        review.id === selected.id ? { ...review, isApproved } : review
-      )
-    );
-  };
-  const approveAllPending = () => {
-    setItems((current) =>
-      current.map((review) =>
-        review.isApproved ? review : { ...review, isApproved: true }
-      )
-    );
-  };
+  const [products, setProducts] = useState<Product[]>([]);
+  const [productId, setProductId] = useState("");
+  const [productSearch, setProductSearch] = useState("");
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [filter, setFilter] = useState<ReviewFilter>("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadedReviewKey, setLoadedReviewKey] = useState("");
+  const [busyReviewId, setBusyReviewId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      productRepository.getProducts({
+        page: 1,
+        pageSize: 100,
+        search: productSearch.trim() || undefined
+      })
+        .then((result) => {
+          if (!active) return;
+          setProducts(result.items);
+          setProductId((current) => {
+            if (result.items.some((item) => item.id === current)) return current;
+            return result.items[0]?.id || "";
+          });
+          if (!result.items.length) {
+            setReviews([]);
+            setTotalCount(0);
+            setTotalPages(1);
+          }
+          setError("");
+        })
+        .catch((loadError: unknown) => {
+          if (active) setError(getErrorMessage(loadError));
+        })
+        .finally(() => {
+          if (active) setLoadingProducts(false);
+        });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [productSearch]);
+
+  useEffect(() => {
+    if (!productId) return;
+
+    let active = true;
+    const requestKey = `${productId}:${page}`;
+    getProductReviews(productId, { page, pageSize, includePending: true })
+      .then((result) => {
+        if (!active) return;
+        setReviews(result.items);
+        setTotalCount(result.totalCount);
+        setTotalPages(Math.max(result.totalPages, 1));
+        setLoadedReviewKey(requestKey);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setError(getErrorMessage(loadError));
+          setLoadedReviewKey(requestKey);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [page, productId]);
+  const loadingReviews = Boolean(productId) && loadedReviewKey !== `${productId}:${page}`;
+
+  const filteredReviews = useMemo(() => reviews.filter((review) => {
+    const matchesStatus =
+      filter === "all" ||
+      (filter === "pending" && !review.isApproved) ||
+      (filter === "approved" && review.isApproved);
+    const normalizedSearch = search.trim().toLocaleLowerCase();
+    const matchesSearch = !normalizedSearch ||
+      review.customerName.toLocaleLowerCase().includes(normalizedSearch) ||
+      (review.comment ?? "").toLocaleLowerCase().includes(normalizedSearch);
+    return matchesStatus && matchesSearch;
+  }), [filter, reviews, search]);
+
+  async function changeApproval(review: ProductReview, isApproved: boolean) {
+    setBusyReviewId(review.id);
+    setError("");
+    try {
+      const updated = await setProductReviewApproval(review.id, { isApproved });
+      setReviews((current) => current.map((item) => item.id === updated.id ? updated : item));
+    } catch (actionError: unknown) {
+      setError(getErrorMessage(actionError));
+    } finally {
+      setBusyReviewId(null);
+    }
+  }
+
+  async function removeReview(review: ProductReview) {
+    if (!window.confirm("Bạn có chắc muốn xóa đánh giá này?")) return;
+    setBusyReviewId(review.id);
+    setError("");
+    try {
+      await deleteProductReview(review.id);
+      setReviews((current) => current.filter((item) => item.id !== review.id));
+      setTotalCount((current) => Math.max(0, current - 1));
+      setTotalPages(Math.max(1, Math.ceil(Math.max(0, totalCount - 1) / pageSize)));
+      if (reviews.length === 1 && page > 1) setPage((current) => current - 1);
+    } catch (actionError: unknown) {
+      setError(getErrorMessage(actionError));
+    } finally {
+      setBusyReviewId(null);
+    }
+  }
 
   return (
     <>
       <PageHeader
-        eyebrow="KHÁCH HÀNG & MARKETING　›　QUẢN LÝ ĐÁNH GIÁ (PRODUCT REVIEWS)"
-        title="Quản Lý Đánh Giá & Phản Hồi Nông Sản"
-        description="Theo dõi chất lượng, chất lượng dịch vụ và phản hồi của khách hàng sau mỗi đơn hàng."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs flex items-center gap-1">
-              <Download className="h-4 w-4" /> Xuất Báo Cáo Feedback
-            </button>
-            <button className="rounded-lg border border-[#dfe8dd] bg-white px-3 py-2 text-xs flex items-center gap-1">
-              <Settings className="h-4 w-4" /> Quy Tắc Lọc Vi Phạm
-            </button>
-            <button
-              onClick={approveAllPending}
-              className="rounded-lg bg-[#006948] px-3 py-2 text-xs font-bold text-white flex items-center gap-1"
-            >
-              <Check className="h-4 w-4" /> Duyệt tất cả đang chờ
-            </button>
+        eyebrow="KHÁCH HÀNG & MARKETING　›　QUẢN LÝ ĐÁNH GIÁ"
+        title="Duyệt đánh giá sản phẩm"
+        description="Đánh giá được tải từ API theo sản phẩm; tìm kiếm và lọc áp dụng trên trang hiện tại."
+      />
+      {error && <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      <Panel title="Lọc đánh giá">
+        <div className="grid gap-3 md:grid-cols-[minmax(220px,.8fr)_minmax(240px,1fr)]">
+          <div className="space-y-2">
+            <label className="block text-xs font-medium text-[#536156]">
+              Tìm sản phẩm
+              <input
+                value={productSearch}
+                onChange={(event) => {
+                  setProductSearch(event.target.value);
+                  setLoadingProducts(true);
+                  setPage(1);
+                }}
+                className="mt-1 w-full rounded-lg border border-[#dfe8dd] px-3 py-2.5 text-sm"
+                placeholder="Tên sản phẩm hoặc SKU..."
+              />
+            </label>
+            <label className="block text-xs font-medium text-[#536156]">
+              Sản phẩm
+              <select
+                value={productId}
+                onChange={(event) => {
+                  setProductId(event.target.value);
+                  setPage(1);
+                }}
+                disabled={loadingProducts || !products.length}
+                className="mt-1 w-full rounded-lg border border-[#dfe8dd] bg-white px-3 py-2.5 text-sm"
+              >
+                {products.map((product) => <option key={product.id} value={product.id}>{product.name} · {product.code}</option>)}
+              </select>
+            </label>
           </div>
-        }
-      />
-      <KpiGrid
-        items={[
-          {
-            label: "Tổng đánh giá nhận được",
-            value: 1428,
-            hint: "+36 tuần này",
-            tone: "green"
-          },
-          {
-            label: "Điểm đánh giá trung bình",
-            value: "4.8 / 5.0",
-            hint: "92.4% hài lòng",
-            tone: "amber"
-          },
-          {
-            label: "Chờ kiểm duyệt (pending)",
-            value: 18,
-            hint: "4 ưu tiên cao",
-            tone: "amber"
-          },
-          {
-            label: "Cảnh báo tiêu cực / vi phạm",
-            value: 3,
-            hint: "Xử lý ngay",
-            tone: "red"
-          }
-        ]}
-      />
-      <div className="mb-4 rounded-xl border border-[#dfe8dd] bg-white p-3">
-        <div className="flex flex-wrap gap-2">
-          {[
-            ["all", "Tất cả", items.length],
-            [
-              "pending",
-              "Chờ duyệt",
-              items.filter((review) => !review.isApproved).length
-            ],
-            [
-              "approved",
-              "Đã duyệt hiển thị",
-              items.filter((review) => review.isApproved).length
-            ],
-            [
-              "flagged",
-              "Từ chối / Khóa vi phạm",
-              items.filter((review) => review.isFlagged).length
-            ]
-          ].map(([key, label, count]) => (
-            <button
-              className={`rounded-lg px-4 py-2 text-xs ${filter === key ? "bg-[#006948] font-bold text-white" : "bg-[#f1f6ee] text-[#536156]"}`}
-              key={key}
-              onClick={() => setFilter(key as typeof filter)}
-            >
-              {label}　<b>{count}</b>
-            </button>
-          ))}
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <input
-            className="min-w-55 flex-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs"
-            placeholder="Tìm theo khách, comment, mã đơn..."
-          />
-          <select className="rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs">
-            <option>Tất cả sao</option>
-            <option>5 sao</option>
-            <option>1 - 2 sao</option>
-          </select>
-          <select className="rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs">
-            <option>Tất cả sản phẩm nông sản</option>
-            <option>Rau củ hữu cơ</option>
-            <option>Trái cây đặc sản</option>
-          </select>
-          <label className="flex items-center gap-2 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs">
-            <input type="checkbox" /> Có ảnh / video
+          <label className="text-xs font-medium text-[#536156]">
+            Tìm khách hàng hoặc nội dung
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-[#dfe8dd] px-3 py-2.5 text-sm"
+              placeholder="Nhập từ khóa..."
+            />
           </label>
         </div>
-      </div>
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(330px,.7fr)]">
-        <Panel title={`Đánh giá khách hàng　(${filtered.length} kết quả)`}>
-          <div className="space-y-3">
-            {filtered.map((review) => (
-              <button
-                className={`w-full rounded-xl border p-4 text-left transition ${selectedId === review.id ? "border-[#006948] bg-[#f7fcf6]" : "border-[#e1e9df] bg-white hover:border-[#9ebaa7]"}`}
-                key={review.id}
-                onClick={() => setSelectedId(review.id)}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#d1fae5] text-xs font-bold text-[#065f46]">
-                    {review.customerName
-                      .split(" ")
-                      .map((part) => part[0])
-                      .slice(-2)
-                      .join("")}
-                  </div>
-                  <div className="min-w-0 flex-1">
+        <p className="mt-3 text-xs text-[#66736a]">Tìm kiếm và bộ lọc trạng thái chỉ áp dụng cho các đánh giá đang hiển thị ở trang này.</p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          {([
+            ["all", "Tất cả"],
+            ["pending", "Chờ duyệt"],
+            ["approved", "Đã duyệt"]
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`rounded-lg px-4 py-2 text-xs ${filter === key ? "bg-[#006948] font-bold text-white" : "bg-[#f1f6ee] text-[#536156]"}`}
+            >
+              {label}
+            </button>
+          ))}
+          <span className="ml-auto self-center text-xs text-[#66736a]">{totalCount} đánh giá · trang {page}/{totalPages}</span>
+        </div>
+      </Panel>
+
+      <div className="mt-4">
+        <Panel title={`Đánh giá (${filteredReviews.length} trên trang hiện tại)`}>
+          {loadingProducts || loadingReviews ? (
+            <p className="py-8 text-center text-sm text-[#66736a]">Đang tải đánh giá...</p>
+          ) : !productId ? (
+            <p className="py-8 text-center text-sm text-[#66736a]">Chưa có sản phẩm để tải đánh giá.</p>
+          ) : filteredReviews.length ? (
+            <div className="divide-y divide-[#e1e9df]">
+              {filteredReviews.map((review) => (
+                <article key={review.id} className="flex flex-col gap-4 py-4 first:pt-0 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <b className="text-sm">{review.customerName}</b>
-                      <StatusBadge tone="amber">
-                        {review.customerTier}
-                      </StatusBadge>
-                      <StatusBadge tone="green">Đã mua hàng</StatusBadge>
-                      <span className="text-[10px] text-[#7a857c]">
-                        {new Date(review.createdAt).toLocaleString("vi-VN")}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs tracking-widest text-[#d97706]">
-                      {stars(review.rating)}{" "}
-                      <span className="ml-1 tracking-normal text-[#66736a]">
+                      <StatusBadge tone={review.isApproved ? "green" : "amber"}>
                         {review.isApproved ? "Đã duyệt" : "Chờ duyệt"}
-                      </span>
+                      </StatusBadge>
+                      <span className="text-xs text-[#66736a]">{new Date(review.createdAt).toLocaleString("vi-VN")}</span>
                     </div>
-                    <div className="mt-3 flex gap-3 rounded-lg bg-[#f1f6ee] p-2">
-                      <Image
-                        className="h-12 w-12 rounded object-cover"
-                        // src={review.productImageUrl}
-                        alt=""
-                        width={48}
-                        height={48}
-                      />
-                      <span>
-                        <b className="block text-xs">{review.productName}</b>
-                        <small className="text-[10px] text-[#66736a]">
-                          {review.productCode} · {formatCurrency(165000)}
-                        </small>
-                      </span>
-                    </div>
-                    <p
-                      className={`mt-3 text-xs leading-5 ${review.isFlagged ? "text-red-600" : "text-[#536156]"}`}
-                    >
-                      &ldquo;{review.comment}&rdquo;
+                    <p className="mt-1 tracking-widest text-amber-600" aria-label={`${review.rating} trên 5 sao`}>
+                      {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
                     </p>
-                    <div className="mt-2 flex flex-wrap gap-2 text-[10px]">
-                      {review.hasImages && (
-                        <span className="rounded bg-[#eef2ec] px-2 py-1 flex items-center gap-1">
-                          <ImageIcon className="h-3 w-3" /> 2 ảnh đính kèm
-                        </span>
-                      )}
-                      {review.isFlagged && (
-                        <span className="rounded bg-[#fee2e2] px-2 py-1 text-red-700 flex items-center gap-1">
-                          <AlertTriangle className="h-3 w-3" /> Cần CSKH xử lý
-                        </span>
-                      )}
-                      {review.reply && (
-                        <span className="rounded bg-[#d1fae5] px-2 py-1 text-[#065f46] flex items-center gap-1">
-                          <Reply className="h-3 w-3" /> Đã phản hồi
-                        </span>
-                      )}
-                    </div>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#536156]">{review.comment || "Khách hàng không để lại nhận xét."}</p>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </Panel>
-        <Panel
-          title={
-            selected
-              ? `Chi Tiết Đánh Giá　#${selected.id.slice(-4).toUpperCase()}`
-              : "Chi Tiết Đánh Giá"
-          }
-        >
-          {selected && (
-            <div className="space-y-4 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="text-[#66736a]">Trạng thái hiện tại</span>
-                <StatusBadge
-                  tone={
-                    selected.isApproved
-                      ? "green"
-                      : selected.isFlagged
-                        ? "red"
-                        : "amber"
-                  }
-                >
-                  {selected.isApproved
-                    ? "Approved"
-                    : selected.isFlagged
-                      ? "Flagged"
-                      : "Pending"}
-                </StatusBadge>
-              </div>
-              <div className="rounded-lg bg-[#f1f6ee] p-3">
-                <small className="text-[#66736a]">ĐƠN HÀNG GỐC</small>
-                <b className="mt-1 block text-[#006948]">
-                  {selected.orderCode}
-                </b>
-                <span className="mt-2 block">{selected.productName}</span>
-              </div>
-              <div>
-                <small className="text-[#66736a]">ĐIỂM CHẤM TỪ KHÁCH</small>
-                <div className="mt-1 text-xl font-bold">
-                  {selected.rating}.0{" "}
-                  <span className="text-sm tracking-widest text-[#d97706]">
-                    {stars(selected.rating)}
-                  </span>
-                </div>
-              </div>
-              <div className="rounded-lg border border-[#e1e9df] p-3 leading-5">
-                &ldquo;{selected.comment}&rdquo;
-              </div>
-              {selected.hasImages && (
-                <div className="grid grid-cols-2 gap-2">
-                  <Image
-                    className="h-24 w-full rounded-lg object-cover"
-                    // src={selected.productImageUrl}
-                    alt=""
-                    width={96}
-                    height={96}
-                  />
-                  <Image
-                    className="h-24 w-full rounded-lg object-cover"
-                    // src={selected.productImageUrl}
-                    alt=""
-                    width={96}
-                    height={96}
-                  />
-                </div>
-              )}
-              <div>
-                <small className="text-[#66736a]">QUYẾT ĐỊNH KIỂM DUYỆT</small>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => approve(true)}
-                    className="rounded-lg bg-[#006948] p-2 text-[10px] font-bold text-white flex items-center justify-center gap-1"
-                  >
-                    <Check className="h-3 w-3" /> Duyệt hiển thị
-                  </button>
-                  <button
-                    onClick={() => approve(false)}
-                    className="rounded-lg bg-[#fef3c7] p-2 text-[10px] text-[#92400e] flex items-center justify-center gap-1"
-                  >
-                    <RotateCcw className="h-3 w-3" /> Từ chối
-                  </button>
-                  <button className="rounded-lg bg-[#fee2e2] p-2 text-[10px] text-red-700 flex items-center justify-center gap-1">
-                    <Ban className="h-3 w-3" /> Khóa vi phạm
-                  </button>
-                </div>
-              </div>
-              <div className="rounded-lg bg-[#f1f6ee] p-3">
-                <b>Phản hồi từ AgriStore</b>
-                <p className="mt-2 text-[#536156]">
-                  {selected.reply ?? "Chưa có phản hồi cho khách hàng."}
-                </p>
-                <button className="mt-2 rounded bg-[#006948] px-3 py-2 text-[10px] font-bold text-white flex items-center gap-1">
-                  <Play className="h-3 w-3" /> Cập nhật & Gửi phản hồi cho khách
-                </button>
-              </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      disabled={busyReviewId === review.id || review.isApproved}
+                      onClick={() => void changeApproval(review, true)}
+                      className="rounded-lg bg-[#006948] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"
+                    >
+                      Duyệt
+                    </button>
+                    <button
+                      disabled={busyReviewId === review.id || !review.isApproved}
+                      onClick={() => void changeApproval(review, false)}
+                      className="rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs disabled:opacity-50"
+                    >
+                      Gỡ duyệt
+                    </button>
+                    <button
+                      disabled={busyReviewId === review.id}
+                      onClick={() => void removeReview(review)}
+                      className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 disabled:opacity-50"
+                    >
+                      Xóa
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-[#66736a]">Không có đánh giá nào phù hợp.</p>
+          )}
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between border-t border-[#e1e9df] pt-4 text-xs text-[#66736a]">
+              <button disabled={page <= 1} onClick={() => setPage((current) => current - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Trang trước</button>
+              <span>Trang {page} / {totalPages}</span>
+              <button disabled={page >= totalPages} onClick={() => setPage((current) => current + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Trang sau</button>
             </div>
           )}
         </Panel>
-      </div>
-      <div className="mt-4 flex justify-between text-xs text-[#66736a]">
-        <span>Đang xem trang 1 trên 143 trang · Số dòng mỗi trang: 10</span>
-        <span className="rounded bg-[#006948] px-3 py-1 text-white">1</span>
       </div>
     </>
   );

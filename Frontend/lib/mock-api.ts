@@ -34,12 +34,16 @@ export async function mockDeleteUnit(id: string) {
 export async function mockProducts(params: ProductQuery = {}): Promise<PaginatedResponse<Product>> {
   await new Promise((resolve) => setTimeout(resolve, 180));
   let result = [...products];
-  if (params.search) result = result.filter((product) => product.name.toLowerCase().includes(params.search!.toLowerCase()));
+  if (params.search) result = result.filter((product) =>
+    product.name.toLowerCase().includes(params.search!.toLowerCase()) ||
+    product.code.toLowerCase().includes(params.search!.toLowerCase())
+  );
   if (params.categoryId) result = result.filter((product) => product.categoryId === params.categoryId);
   if (params.unitId) result = result.filter((product) => product.unitId === params.unitId);
   if (params.minPrice !== undefined) result = result.filter((product) => product.sellingPrice >= params.minPrice!);
   if (params.maxPrice !== undefined) result = result.filter((product) => product.sellingPrice <= params.maxPrice!);
   if (params.isFeatured !== undefined) result = result.filter((product) => product.isFeatured === params.isFeatured);
+  if (params.isActive !== undefined) result = result.filter((product) => product.isActive === params.isActive);
   if (params.sortBy) result.sort((a, b) => String(a[params.sortBy!]).localeCompare(String(b[params.sortBy!])));
   if (params.sortDirection === "desc") result.reverse();
   const page = params.page ?? 1;
