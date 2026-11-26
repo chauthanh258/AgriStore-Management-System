@@ -21,9 +21,20 @@ public sealed class ProductService(
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var search = $"%{query.Search.Trim()}%";
-            productsQuery = productsQuery.Where(product =>
-                EF.Functions.ILike(product.Code, search) || EF.Functions.ILike(product.Name, search));
+            var search = query.Search.Trim();
+            if (dbContext.Database.IsNpgsql())
+            {
+                var pattern = $"%{search}%";
+                productsQuery = productsQuery.Where(product =>
+                    EF.Functions.ILike(product.Code, pattern) || EF.Functions.ILike(product.Name, pattern));
+            }
+            else
+            {
+                var normalizedSearch = search.ToUpperInvariant();
+                productsQuery = productsQuery.Where(product =>
+                    product.Code.ToUpper().Contains(normalizedSearch)
+                    || product.Name.ToUpper().Contains(normalizedSearch));
+            }
         }
 
         if (query.CategoryId.HasValue)
