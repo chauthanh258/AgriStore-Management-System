@@ -2,10 +2,24 @@ using System.ComponentModel.DataAnnotations;
 
 namespace AgriStore.Api.DTOs.PurchaseOrders;
 
+/// <summary>
+/// Query tìm kiếm và phân trang danh sách đơn nhập hàng.
+/// </summary>
+/// <param name="Page">Trang hiện tại (mặc định 1).</param>
+/// <param name="PageSize">Số bản ghi mỗi trang (mặc định 20, tối đa 100).</param>
+/// <param name="Status">Lọc theo trạng thái: Draft, Ordered, Received, Cancelled.</param>
+/// <param name="Search">Tìm theo mã PO (prefix, không phân biệt hoa thường).</param>
+/// <param name="SupplierId">Lọc theo nhà cung cấp.</param>
+/// <param name="FromDate">Lọc đơn từ ngày (theo OrderDate, UTC).</param>
+/// <param name="ToDate">Lọc đơn đến ngày (theo OrderDate, UTC).</param>
 public sealed record PurchaseOrderListQuery(
     int Page = 1,
     int PageSize = 20,
-    string? Status = null);
+    string? Status = null,
+    string? Search = null,
+    Guid? SupplierId = null,
+    DateOnly? FromDate = null,
+    DateOnly? ToDate = null);
 
 public sealed record PurchaseOrderListItemResponse(
     Guid Id,
