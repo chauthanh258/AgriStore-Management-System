@@ -18,10 +18,14 @@ export default function VouchersPage() {
       title="Quản Lý Mã Giảm Giá & Chương Trình Khuyến Mãi"
       description="Mock repository sẵn sàng kết nối API coupon khi backend bổ sung contract."
       action={
-        <button className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">
-          <button onClick={() => { setSaved(""); setModalOpen(true); }} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white">
-            ＋ Tạo Khuyến Mãi Mới (F1)
-          </button>
+        <button
+          onClick={() => {
+            setSaved("");
+            setModalOpen(true);
+          }}
+          className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white"
+        >
+          ＋ Tạo Khuyến Mãi Mới (F1)
         </button>
       }
       headers={[

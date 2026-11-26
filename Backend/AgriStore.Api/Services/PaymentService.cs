@@ -104,6 +104,22 @@ public sealed class PaymentService(ApplicationDbContext dbContext) : IPaymentSer
             return null;
         }
 
+        var orderStatus = await dbContext.Orders
+            .Where(item => item.Id == orderId)
+            .Select(item => item.Status)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (orderStatus is null)
+        {
+            return null;
+        }
+
+        if (orderStatus == "Cancelled")
+        {
+            throw new InvalidOperationException(
+                "Không thể cập nhật thanh toán cho đơn hàng đã hủy.");
+        }
+
         var nextStatus = request.Status.Trim();
         var canChange = (payment.Status, nextStatus.ToUpperInvariant()) switch
         {
