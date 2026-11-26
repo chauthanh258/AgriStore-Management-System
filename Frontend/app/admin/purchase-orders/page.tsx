@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminModal, IconButton, PageHeader, StatusBadge, DataTable } from "../../../components/admin/admin-ui";
 import { products as mockProducts, purchaseOrders, suppliers as mockSuppliers } from "../../../data/admin-mock";
 import { formatCurrency } from "../../../lib/formatters";
@@ -8,15 +8,18 @@ import {
   createPurchaseOrder,
   getPurchaseOrder,
   getPurchaseOrders,
+  orderPurchaseOrder,
+  receivePurchaseOrder,
   updatePurchaseOrder
 } from "../../../services/purchase-orders/purchase-order.service";
 import { getProducts } from "../../../services/products/product.service";
 import { createSupplier, getSuppliers, setSupplierStatus, updateSupplier } from "../../../services/suppliers/supplier.service";
 import { getWarehouses } from "../../../services/warehouses/warehouse.service";
 import type { Product, Supplier, SupplierRequest, Warehouse } from "../../../types/api";
-import type { PurchaseOrder, PurchaseOrderLineRequest, PurchaseOrderListItem, PurchaseOrderRequest } from "../../../types/purchase-orders";
+import type { PurchaseOrder, PurchaseOrderLineRequest, PurchaseOrderListItem, PurchaseOrderRequest, ReceivePurchaseOrderRequest } from "../../../types/purchase-orders";
 import { statusTone } from "../../../components/admin/resource-page";
-import { Check, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Eye, Pencil, Plus, Power, Trash2 } from "lucide-react";
+import PurchaseOrderDetailModal, { type UncertainAction } from "./purchase-order-detail";
 
 const useMock = process.env.NEXT_PUBLIC_USE_MOCK_API !== "false";
 const pageSize = 10;
@@ -46,6 +49,7 @@ const mockSupplierItems: Supplier[] = mockSuppliers.map((supplier) => ({
 
 const initialMockPurchaseOrders: PurchaseOrder[] = purchaseOrders.map((order) => ({
   ...order,
+  totalAmount: order.details.reduce((total, detail) => total + detail.quantity * detail.unitPrice, 0),
   expectedDate: null,
   notes: null,
   details: order.details.map((detail, index) => {
@@ -58,7 +62,7 @@ const initialMockPurchaseOrders: PurchaseOrder[] = purchaseOrders.map((order) =>
       quantity: detail.quantity,
       unitPrice: detail.unitPrice,
       totalPrice: detail.quantity * detail.unitPrice,
-      receivedQuantity: detail.receivedQuantity
+      receivedQuantity: order.status === "Received" ? detail.quantity : detail.receivedQuantity
     };
   })
 }));
@@ -162,6 +166,8 @@ export default function PurchaseOrdersPage() {
   const [savingSupplier, setSavingSupplier] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [purchaseOrderModalOpen, setPurchaseOrderModalOpen] = useState(false);
+  const [detailOrderId, setDetailOrderId] = useState<string | null>(null);
+  const [unresolvedOrders, setUnresolvedOrders] = useState<Record<string, UncertainAction>>({});
   const [purchaseOrderLoading, setPurchaseOrderLoading] = useState(false);
   const [purchaseOrderLoadFailed, setPurchaseOrderLoadFailed] = useState(false);
   const [savingPurchaseOrder, setSavingPurchaseOrder] = useState(false);
@@ -269,6 +275,42 @@ export default function PurchaseOrdersPage() {
     ? supplierResult.error
     : "";
 
+  const loadOrderDetail = useCallback(async (id: string) => {
+    if (!useMock) return getPurchaseOrder(id);
+    const order = mockPurchaseOrders.find((item) => item.id === id);
+    if (!order) throw new Error("Không tìm thấy đơn nhập hàng.");
+    return order;
+  }, [mockPurchaseOrders]);
+
+  async function markOrder(id: string) {
+    if (!useMock) return orderPurchaseOrder(id);
+    const order = await loadOrderDetail(id);
+    if (order.status !== "Draft" || order.details.length === 0) {
+      throw new Error("Chỉ có thể đặt đơn nháp có sản phẩm.");
+    }
+    const updated = { ...order, status: "Ordered" };
+    setMockPurchaseOrders((current) => current.map((item) => item.id === id ? updated : item));
+    return updated;
+  }
+
+  async function receiveOrder(id: string, request: ReceivePurchaseOrderRequest) {
+    if (!useMock) return receivePurchaseOrder(id, request);
+    const order = await loadOrderDetail(id);
+    if (order.status !== "Ordered") throw new Error("Đơn nhập không còn ở trạng thái có thể nhận hàng.");
+    const details = order.details.map((detail) => {
+      const line = request.details.find((item) => item.productId === detail.productId);
+      if (!line) return detail;
+      const received = Math.round((detail.receivedQuantity + line.receivedQuantity) * 1000) / 1000;
+      if (line.receivedQuantity <= 0 || received > detail.quantity) {
+        throw new Error(`Số lượng nhận của ${detail.productName} không hợp lệ.`);
+      }
+      return { ...detail, receivedQuantity: received };
+    });
+    const updated = { ...order, details, status: details.every((detail) => detail.receivedQuantity >= detail.quantity) ? "Received" : "Ordered" };
+    setMockPurchaseOrders((current) => current.map((item) => item.id === id ? updated : item));
+    return updated;
+  }
+
   function openCreateSupplier() {
     setEditingSupplier(null);
     setForm(emptySupplierForm);
@@ -357,6 +399,7 @@ export default function PurchaseOrdersPage() {
   }
 
   async function openPurchaseOrderForm(orderId?: string) {
+    if (orderId && unresolvedOrders[orderId]) return;
     const requestId = ++purchaseOrderLoadRequestId.current;
     setEditingPurchaseOrderId(orderId ?? null);
     setPurchaseOrderForm(createEmptyPurchaseOrderForm());
@@ -463,6 +506,10 @@ export default function PurchaseOrdersPage() {
     event.preventDefault();
     setPurchaseOrderError("");
 
+    if (editingPurchaseOrderId && unresolvedOrders[editingPurchaseOrderId]) {
+      setPurchaseOrderError("Cần đối soát thao tác trước của đơn này trước khi sửa.");
+      return;
+    }
     if (purchaseOrderLoading || purchaseOrderLoadFailed) {
       setPurchaseOrderError("Tải dữ liệu biểu mẫu chưa thành công. Vui lòng thử tải lại.");
       return;
@@ -631,9 +678,10 @@ export default function PurchaseOrdersPage() {
                 <td className="px-3 py-3">{formatCurrency(order.totalAmount)}</td>
                 <td className="px-3 py-3"><StatusBadge tone={statusTone(order.status)}>{getStatusLabel(order.status)}</StatusBadge></td>
                 <td className="px-3 py-3">
-                  {order.status === "Draft"
-                    ? <IconButton label={`Sửa đơn nhập ${order.code}`} onClick={() => void openPurchaseOrderForm(order.id)}><Pencil className="h-4 w-4" /></IconButton>
-                    : <span className="text-[#66736a]">Chỉ xem</span>}
+                  <div className="flex items-center gap-2">
+                    <IconButton label={`Xem đơn nhập ${order.code}`} onClick={() => setDetailOrderId(order.id)}><Eye className="h-4 w-4" /></IconButton>
+                    {order.status === "Draft" && !unresolvedOrders[order.id] && <IconButton label={`Sửa đơn nhập ${order.code}`} onClick={() => void openPurchaseOrderForm(order.id)}><Pencil className="h-4 w-4" /></IconButton>}
+                  </div>
                 </td>
               </tr>)}
             </DataTable>
@@ -703,6 +751,23 @@ export default function PurchaseOrdersPage() {
           </div>
         </div>
       )}
+      {detailOrderId && <PurchaseOrderDetailModal
+        key={detailOrderId}
+        orderId={detailOrderId}
+        mock={useMock}
+        loadOrder={loadOrderDetail}
+        markOrdered={markOrder}
+        receiveOrder={receiveOrder}
+        onChanged={() => { setPage(1); setOrdersReloadCount((current) => current + 1); }}
+        unresolved={unresolvedOrders[detailOrderId]}
+        onUncertain={(action) => setUnresolvedOrders((current) => ({ ...current, [detailOrderId]: action }))}
+        onReconciled={() => setUnresolvedOrders((current) => {
+          const next = { ...current };
+          delete next[detailOrderId];
+          return next;
+        })}
+        onClose={() => setDetailOrderId(null)}
+      />}
       {modalOpen && <AdminModal title={editingSupplier ? "Cập nhật nhà cung cấp" : "Thêm nhà cung cấp"} description="Thông tin nhà vườn/hợp tác xã dùng cho đơn nhập hàng." onClose={() => setModalOpen(false)} footer={<><button className="rounded-lg border px-4 py-2 text-xs" onClick={() => setModalOpen(false)}>Hủy</button><button form="supplier-form" disabled={savingSupplier} className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{savingSupplier ? "Đang lưu..." : "Lưu nhà cung cấp"}</button></>}>
         {supplierError && <div role="alert" className="mb-4 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">{supplierError}</div>}
         <form id="supplier-form" onSubmit={(event) => void saveSupplier(event)} className="grid gap-4 sm:grid-cols-2 text-xs">
