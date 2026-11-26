@@ -473,7 +473,7 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
     }
 
     // MapAsync: gọi sau Create/Update/etc khi đã có entity trong memory.
-    // Chạy 2 query song song (header names + details) thay vì 3 query tuần tự cũ.
+    // Chạy 2 query tuần tự (tránh lỗi DbContext không thread-safe với Task.WhenAll).
     private Task<PurchaseOrderResponse> MapAsync(PurchaseOrder order, CancellationToken cancellationToken)
         => MapByIdAsync(order.Id, order, cancellationToken);
 
@@ -482,8 +482,8 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
         PurchaseOrder order,
         CancellationToken cancellationToken)
     {
-        // 1 query duy nhất: JOIN supplier + warehouse + details + products
-        var headerTask = (
+        // Chạy tuần tự để tránh lỗi DbContext không thread-safe khi dùng Task.WhenAll
+        var header = await (
             from o in dbContext.PurchaseOrders.AsNoTracking()
             join supplier in dbContext.Suppliers.AsNoTracking() on o.SupplierId equals supplier.Id
             join warehouse in dbContext.Warehouses.AsNoTracking() on o.WarehouseId equals warehouse.Id
@@ -491,7 +491,7 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
             select new { SupplierName = supplier.Name, WarehouseName = warehouse.Name })
             .SingleAsync(cancellationToken);
 
-        var detailsTask = (
+        var details = await (
             from detail in dbContext.PurchaseOrderDetails.AsNoTracking()
             join product in dbContext.Products.AsNoTracking() on detail.ProductId equals product.Id
             where detail.PurchaseOrderId == id
@@ -506,11 +506,6 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
                 detail.TotalPrice,
                 detail.ReceivedQuantity))
             .ToListAsync(cancellationToken);
-
-        // 2 query chạy song song thay vì 4 lần tuần tự
-        await Task.WhenAll(headerTask, detailsTask);
-        var header = await headerTask;
-        var details = await detailsTask;
 
         return new PurchaseOrderResponse(
             order.Id,
