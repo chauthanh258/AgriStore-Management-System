@@ -569,6 +569,10 @@ namespace AgriStore.Api.Data.Migrations
 
                     b.HasIndex("UserId");
 
+                    b.HasIndex("OrderDate", "Id");
+
+                    b.HasIndex("Status", "OrderDate", "Id");
+
                     b.ToTable("Orders", (string)null);
                 });
 
@@ -646,6 +650,8 @@ namespace AgriStore.Api.Data.Migrations
 
                     b.HasIndex("OrderId")
                         .IsUnique();
+
+                    b.HasIndex("Status", "PaidAt");
 
                     b.ToTable("Payments", (string)null);
                 });

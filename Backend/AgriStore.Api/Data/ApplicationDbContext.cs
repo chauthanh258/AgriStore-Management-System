@@ -276,6 +276,8 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.Property(item => item.ShippingFee).HasPrecision(18, 2);
             entity.Property(item => item.TotalAmount).HasPrecision(18, 2);
             entity.HasIndex(item => item.Code).IsUnique();
+            entity.HasIndex(item => new { item.OrderDate, item.Id });
+            entity.HasIndex(item => new { item.Status, item.OrderDate, item.Id });
             entity.HasOne<Customer>().WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne<Address>().WithMany().HasForeignKey(item => item.ShippingAddressId).OnDelete(DeleteBehavior.SetNull);
@@ -304,6 +306,7 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.Property(item => item.Status).HasMaxLength(30).IsRequired();
             entity.Property(item => item.TransactionCode).HasMaxLength(100);
             entity.HasIndex(item => item.OrderId).IsUnique();
+            entity.HasIndex(item => new { item.Status, item.PaidAt });
             entity.HasOne<Order>().WithMany().HasForeignKey(item => item.OrderId).OnDelete(DeleteBehavior.Cascade);
         });
 

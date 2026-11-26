@@ -185,8 +185,10 @@ export default function ReviewsPage() {
                     <div className="mt-3 flex gap-3 rounded-lg bg-[#f1f6ee] p-2">
                       <Image
                         className="h-12 w-12 rounded object-cover"
-                        src={review.productImageUrl}
+                        // src={review.productImageUrl}
                         alt=""
+                        width={48}
+                        height={48}
                       />
                       <span>
                         <b className="block text-xs">{review.productName}</b>
@@ -273,13 +275,17 @@ export default function ReviewsPage() {
                 <div className="grid grid-cols-2 gap-2">
                   <Image
                     className="h-24 w-full rounded-lg object-cover"
-                    src={selected.productImageUrl}
+                    // src={selected.productImageUrl}
                     alt=""
+                    width={96}
+                    height={96}
                   />
                   <Image
                     className="h-24 w-full rounded-lg object-cover"
-                    src={selected.productImageUrl}
+                    // src={selected.productImageUrl}
                     alt=""
+                    width={96}
+                    height={96}
                   />
                 </div>
               )}

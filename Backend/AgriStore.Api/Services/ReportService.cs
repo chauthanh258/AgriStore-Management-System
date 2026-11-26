@@ -20,11 +20,15 @@ public sealed class ReportService(ApplicationDbContext dbContext) : IReportServi
             throw new ArgumentException("GroupBy chỉ nhận day hoặc month.");
         }
 
-        var paidPayments = dbContext.Payments
-            .AsNoTracking()
-            .Where(payment => payment.Status == "Paid" &&
-                              payment.PaidAt >= fromUtc &&
-                              payment.PaidAt < toExclusiveUtc);
+        var paidPayments =
+            from payment in dbContext.Payments.AsNoTracking()
+            join order in dbContext.Orders.AsNoTracking()
+                on payment.OrderId equals order.Id
+            where payment.Status == "Paid" &&
+                  order.Status != "Cancelled" &&
+                  payment.PaidAt >= fromUtc &&
+                  payment.PaidAt < toExclusiveUtc
+            select payment;
 
         List<RevenuePeriodResponse> periods;
 
@@ -113,6 +117,7 @@ public sealed class ReportService(ApplicationDbContext dbContext) : IReportServi
             join product in dbContext.Products.AsNoTracking()
                 on detail.ProductId equals product.Id
             where payment.Status == "Paid" &&
+                  order.Status != "Cancelled" &&
                   payment.PaidAt >= fromUtc &&
                   payment.PaidAt < toExclusiveUtc
             group detail by new
