@@ -48,6 +48,7 @@ public class ApplicationDbContext : IdentityDbContext<
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
+        builder.HasPostgresExtension("pg_trgm");
 
         builder.Entity<ApplicationUser>(entity =>
         {
@@ -150,6 +151,20 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.Property(item => item.SellingPrice).HasPrecision(18, 2);
             entity.Property(item => item.MinStockAlert).HasPrecision(18, 3);
             entity.HasIndex(item => item.Code).IsUnique();
+            entity.HasIndex(item => new { item.Name, item.Code })
+                .HasDatabaseName("IX_Products_Name_Code");
+            entity.HasIndex(item => new { item.IsActive, item.CreatedAt, item.Code })
+                .IsDescending(false, true, false)
+                .HasDatabaseName("IX_Products_IsActive_CreatedAt_Code");
+            entity.HasIndex(item => new { item.CategoryId, item.IsActive, item.CreatedAt, item.Code })
+                .IsDescending(false, false, true, false)
+                .HasDatabaseName("IX_Products_Category_IsActive_CreatedAt_Code");
+            entity.HasIndex(item => new { item.IsActive, item.SellingPrice, item.Code })
+                .HasDatabaseName("IX_Products_IsActive_SellingPrice_Code");
+            entity.HasIndex(item => new { item.Code, item.Name })
+                .HasMethod("gin")
+                .HasOperators("gin_trgm_ops", "gin_trgm_ops")
+                .HasDatabaseName("IX_Products_Code_Name_Trgm");
             entity.HasOne<Category>().WithMany().HasForeignKey(item => item.CategoryId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Unit>().WithMany().HasForeignKey(item => item.UnitId).OnDelete(DeleteBehavior.Restrict);
         });

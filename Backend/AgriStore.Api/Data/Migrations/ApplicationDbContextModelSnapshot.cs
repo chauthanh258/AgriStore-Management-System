@@ -20,6 +20,7 @@ namespace AgriStore.Api.Data.Migrations
                 .HasAnnotation("ProductVersion", "10.0.8")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "pg_trgm");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("AgriStore.Api.Domain.Entities.Address", b =>
@@ -838,12 +839,30 @@ namespace AgriStore.Api.Data.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
-
                     b.HasIndex("Code")
                         .IsUnique();
 
                     b.HasIndex("UnitId");
+
+                    b.HasIndex("Code", "Name")
+                        .HasDatabaseName("IX_Products_Code_Name_Trgm");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Code", "Name"), "gin");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Code", "Name"), new[] { "gin_trgm_ops", "gin_trgm_ops" });
+
+                    b.HasIndex("Name", "Code")
+                        .HasDatabaseName("IX_Products_Name_Code");
+
+                    b.HasIndex("IsActive", "CreatedAt", "Code")
+                        .IsDescending(false, true, false)
+                        .HasDatabaseName("IX_Products_IsActive_CreatedAt_Code");
+
+                    b.HasIndex("IsActive", "SellingPrice", "Code")
+                        .HasDatabaseName("IX_Products_IsActive_SellingPrice_Code");
+
+                    b.HasIndex("CategoryId", "IsActive", "CreatedAt", "Code")
+                        .IsDescending(false, false, true, false)
+                        .HasDatabaseName("IX_Products_Category_IsActive_CreatedAt_Code");
 
                     b.ToTable("Products", null, t =>
                         {
