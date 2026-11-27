@@ -8,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/roles")]
-// [Authorize(Policy = AuthorizationPolicies.ManageRoles)]
+[Authorize(Policy = AuthorizationPolicies.ManageRoles)]
 public sealed class RolesController(IRoleService roleService) : ControllerBase
 {
     [HttpGet]
@@ -25,6 +25,40 @@ public sealed class RolesController(IRoleService roleService) : ControllerBase
     {
         var role = await roleService.GetByIdAsync(id, cancellationToken);
         return role is null ? NotFound() : Ok(role);
+    }
+
+    [HttpGet("permissions")]
+    [ProducesResponseType(typeof(IReadOnlyCollection<PermissionResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyCollection<PermissionResponse>>> GetPermissions(
+        CancellationToken cancellationToken)
+    {
+        return Ok(await roleService.GetPermissionsAsync(cancellationToken));
+    }
+
+    [HttpGet("{id:guid}/permissions")]
+    [ProducesResponseType(typeof(RolePermissionsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RolePermissionsResponse>> GetPermissions(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await roleService.GetPermissionsForRoleAsync(id, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPut("{id:guid}/permissions")]
+    [Authorize(Policy = PermissionPolicies.AssignRolePermissions)]
+    [ProducesResponseType(typeof(RolePermissionsResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<RolePermissionsResponse>> ReplacePermissions(
+        Guid id,
+        UpdateRolePermissionsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await roleService.ReplacePermissionsAsync(id, request.PermissionCodes, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 
     [HttpPost]

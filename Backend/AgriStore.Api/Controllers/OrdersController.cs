@@ -9,10 +9,10 @@ namespace AgriStore.Api.Controllers;
 
 [ApiController]
 [Route("api/orders")]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class OrdersController(IOrderService orderService) : ControllerBase
 {
     [HttpGet]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderListResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<OrderListResponse>> GetAll(
         [FromQuery] OrderListQuery query,
@@ -23,6 +23,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<OrderResponse>> GetById(
@@ -35,6 +36,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPost("pos")]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status409Conflict)]
@@ -75,6 +77,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPost("online")]
+    [Authorize(Roles = SystemRoles.Customer)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<OrderResponse>> CreateOnline(
@@ -105,6 +108,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -144,6 +148,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPatch("{id:guid}/status")]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -183,6 +188,7 @@ public sealed class OrdersController(IOrderService orderService) : ControllerBas
     }
 
     [HttpPost("{id:guid}/coupon")]
+    [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
     [ProducesResponseType(typeof(OrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

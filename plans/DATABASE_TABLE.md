@@ -8,7 +8,21 @@ Chi tiết các bảng quan trọng (cột chính)
     Description
     CreatedAt
 
-2. Users
+2. Permissions
+
+    Code (PK, mã ổn định theo module.action)
+    Name, Description
+    Module, Action
+
+3. RolePermissions
+
+    RoleId (FK → Roles.Id)
+    PermissionCode (FK → Permissions.Code)
+    Primary Key composite (RoleId + PermissionCode)
+
+    Danh mục permission được khai báo/seed từ code; Admin có toàn quyền.
+
+4. Users
 
     Id (PK, Guid hoặc int)
     UserName, Email, PasswordHash
@@ -17,7 +31,7 @@ Chi tiết các bảng quan trọng (cột chính)
     CreatedAt, UpdatedAt
     (Có thể liên kết với Employees hoặc Customers)
 
-3. UserRoles
+5. UserRoles
 
     UserId (FK)
     RoleId (FK)

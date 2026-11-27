@@ -8,13 +8,86 @@ namespace AgriStore.Api.Services;
 
 public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurchaseOrderService
 {
+    private const int MaxPageSize = 100;
+
+    public async Task<PurchaseOrderListResponse> GetPagedAsync(
+        PurchaseOrderListQuery query,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
+        var ordersQuery = dbContext.PurchaseOrders.AsNoTracking();
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            var status = query.Status.Trim();
+            ordersQuery = ordersQuery.Where(order => order.Status == status);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var search = query.Search.Trim().ToUpperInvariant();
+            ordersQuery = ordersQuery.Where(order => order.Code.ToUpper().StartsWith(search));
+        }
+
+        if (query.SupplierId.HasValue)
+        {
+            ordersQuery = ordersQuery.Where(order => order.SupplierId == query.SupplierId.Value);
+        }
+
+        if (query.FromDate.HasValue)
+        {
+            var from = query.FromDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            ordersQuery = ordersQuery.Where(order => order.OrderDate >= from);
+        }
+
+        if (query.ToDate.HasValue)
+        {
+            var to = query.ToDate.Value.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
+            ordersQuery = ordersQuery.Where(order => order.OrderDate <= to);
+        }
+
+        var totalCount = await ordersQuery.CountAsync(cancellationToken);
+        var skip = ((long)page - 1) * pageSize;
+        var items = skip > int.MaxValue
+            ? []
+            : await (
+                from order in ordersQuery
+                join supplier in dbContext.Suppliers.AsNoTracking()
+                    on order.SupplierId equals supplier.Id
+                join warehouse in dbContext.Warehouses.AsNoTracking()
+                    on order.WarehouseId equals warehouse.Id
+                orderby order.OrderDate descending, order.Id descending
+                select new PurchaseOrderListItemResponse(
+                    order.Id,
+                    order.Code,
+                    supplier.Name,
+                    warehouse.Name,
+                    order.OrderDate,
+                    order.ExpectedDate,
+                    order.Status,
+                    order.TotalAmount))
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+        return new PurchaseOrderListResponse(
+            items,
+            page,
+            pageSize,
+            totalCount,
+            (int)Math.Ceiling(totalCount / (double)pageSize));
+    }
+
     public async Task<PurchaseOrderResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken)
     {
+        // Lấy header order trước (1 query nhẹ), rồi chạy 2 query song song cho names + details.
+        // Tổng: 3 query song song thay vì 4 query tuần tự cũ.
         var order = await dbContext.PurchaseOrders
             .AsNoTracking()
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
-        return order is null ? null : await MapAsync(order, cancellationToken);
+        return order is null ? null : await MapByIdAsync(id, order, cancellationToken);
     }
 
     public async Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> CreateAsync(
@@ -89,16 +162,9 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
         return PurchaseOrderServiceResult<PurchaseOrderResponse>.Success(await MapAsync(order, cancellationToken));
     }
 
-<<<<<<< HEAD
-    public async Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
-        Guid id,
-        ReceivePurchaseOrderRequest request,
-        Guid? createdBy,
-=======
     public async Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> AddDetailAsync(
         Guid id,
         PurchaseOrderLineRequest request,
->>>>>>> main
         CancellationToken cancellationToken)
     {
         var order = await dbContext.PurchaseOrders
@@ -106,18 +172,6 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
 
         if (order is null)
         {
-<<<<<<< HEAD
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                404,
-                "Không tìm thấy đơn nhập hàng.");
-        }
-
-        if (order.Status is "Cancelled" or "Received")
-        {
-            return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(
-                409,
-                "Đơn nhập hàng không còn ở trạng thái có thể nhận hàng.");
-=======
             return PurchaseOrderServiceResult<PurchaseOrderResponse>.Failure(404, "Không tìm thấy đơn nhập hàng.");
         }
 
@@ -418,20 +472,29 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
         return errors;
     }
 
-    private async Task<PurchaseOrderResponse> MapAsync(PurchaseOrder order, CancellationToken cancellationToken)
+    // MapAsync: gọi sau Create/Update/etc khi đã có entity trong memory.
+    // Chạy 2 query tuần tự (tránh lỗi DbContext không thread-safe với Task.WhenAll).
+    private Task<PurchaseOrderResponse> MapAsync(PurchaseOrder order, CancellationToken cancellationToken)
+        => MapByIdAsync(order.Id, order, cancellationToken);
+
+    private async Task<PurchaseOrderResponse> MapByIdAsync(
+        Guid id,
+        PurchaseOrder order,
+        CancellationToken cancellationToken)
     {
-        var supplierName = await dbContext.Suppliers
-            .Where(item => item.Id == order.SupplierId)
-            .Select(item => item.Name)
+        // Chạy tuần tự để tránh lỗi DbContext không thread-safe khi dùng Task.WhenAll
+        var header = await (
+            from o in dbContext.PurchaseOrders.AsNoTracking()
+            join supplier in dbContext.Suppliers.AsNoTracking() on o.SupplierId equals supplier.Id
+            join warehouse in dbContext.Warehouses.AsNoTracking() on o.WarehouseId equals warehouse.Id
+            where o.Id == id
+            select new { SupplierName = supplier.Name, WarehouseName = warehouse.Name })
             .SingleAsync(cancellationToken);
-        var warehouseName = await dbContext.Warehouses
-            .Where(item => item.Id == order.WarehouseId)
-            .Select(item => item.Name)
-            .SingleAsync(cancellationToken);
+
         var details = await (
             from detail in dbContext.PurchaseOrderDetails.AsNoTracking()
             join product in dbContext.Products.AsNoTracking() on detail.ProductId equals product.Id
-            where detail.PurchaseOrderId == order.Id
+            where detail.PurchaseOrderId == id
             orderby product.Name
             select new PurchaseOrderDetailResponse(
                 detail.Id,
@@ -448,9 +511,9 @@ public sealed class PurchaseOrderService(ApplicationDbContext dbContext) : IPurc
             order.Id,
             order.Code,
             order.SupplierId,
-            supplierName,
+            header.SupplierName,
             order.WarehouseId,
-            warehouseName,
+            header.WarehouseName,
             order.OrderDate,
             order.ExpectedDate,
             order.Status,

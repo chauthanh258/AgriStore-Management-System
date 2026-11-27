@@ -1,4 +1,5 @@
 using AgriStore.Api.Domain.Entities;
+using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -36,6 +37,8 @@ public class ApplicationDbContext : IdentityDbContext<
     public DbSet<ProductReview> ProductReviews => Set<ProductReview>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<Permission> Permissions => Set<Permission>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -60,6 +63,34 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.ToTable("Roles");
             entity.Property(role => role.Description).HasMaxLength(500);
             entity.Property(role => role.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        builder.Entity<Permission>(entity =>
+        {
+            entity.ToTable("Permissions");
+            entity.HasKey(permission => permission.Code);
+            entity.Property(permission => permission.Code).HasMaxLength(100);
+            entity.Property(permission => permission.Name).HasMaxLength(150).IsRequired();
+            entity.Property(permission => permission.Description).HasMaxLength(500);
+            entity.Property(permission => permission.Module).HasMaxLength(50).IsRequired();
+            entity.Property(permission => permission.Action).HasMaxLength(50).IsRequired();
+            entity.HasIndex(permission => new { permission.Module, permission.Action }).IsUnique();
+            entity.HasData(PermissionCatalog.All);
+        });
+
+        builder.Entity<RolePermission>(entity =>
+        {
+            entity.ToTable("RolePermissions");
+            entity.HasKey(rolePermission => new { rolePermission.RoleId, rolePermission.PermissionCode });
+            entity.Property(rolePermission => rolePermission.PermissionCode).HasMaxLength(100);
+            entity.HasOne<ApplicationRole>()
+                .WithMany()
+                .HasForeignKey(rolePermission => rolePermission.RoleId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Permission>()
+                .WithMany()
+                .HasForeignKey(rolePermission => rolePermission.PermissionCode)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         builder.Entity<ApplicationUserRole>(entity =>
@@ -101,7 +132,15 @@ public class ApplicationDbContext : IdentityDbContext<
 
         builder.Entity<Product>(entity =>
         {
-            entity.ToTable("Products");
+            entity.ToTable("Products", table =>
+            {
+                table.HasCheckConstraint("CK_Products_Code_Canonical", "\"Code\" = upper(btrim(\"Code\")) AND \"Code\" ~ '^[A-Z0-9]+([._-][A-Z0-9]+)*$'");
+                table.HasCheckConstraint("CK_Products_CostPrice_NonNegative", "\"CostPrice\" >= 0");
+                table.HasCheckConstraint("CK_Products_SellingPrice_Positive", "\"SellingPrice\" > 0");
+                table.HasCheckConstraint("CK_Products_MinStockAlert_NonNegative", "\"MinStockAlert\" >= 0");
+                table.HasCheckConstraint("CK_Products_ExpiryDays_Positive", "\"ExpiryDays\" IS NULL OR \"ExpiryDays\" > 0");
+                table.HasCheckConstraint("CK_Products_Name_Required", "\"Name\" = btrim(\"Name\") AND length(btrim(\"Name\")) > 0");
+            });
             entity.HasKey(item => item.Id);
             entity.Property(item => item.Code).HasMaxLength(50).IsRequired();
             entity.Property(item => item.Name).HasMaxLength(200).IsRequired();
@@ -237,6 +276,8 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.Property(item => item.ShippingFee).HasPrecision(18, 2);
             entity.Property(item => item.TotalAmount).HasPrecision(18, 2);
             entity.HasIndex(item => item.Code).IsUnique();
+            entity.HasIndex(item => new { item.OrderDate, item.Id });
+            entity.HasIndex(item => new { item.Status, item.OrderDate, item.Id });
             entity.HasOne<Customer>().WithMany().HasForeignKey(item => item.CustomerId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(item => item.UserId).OnDelete(DeleteBehavior.SetNull);
             entity.HasOne<Address>().WithMany().HasForeignKey(item => item.ShippingAddressId).OnDelete(DeleteBehavior.SetNull);
@@ -265,6 +306,7 @@ public class ApplicationDbContext : IdentityDbContext<
             entity.Property(item => item.Status).HasMaxLength(30).IsRequired();
             entity.Property(item => item.TransactionCode).HasMaxLength(100);
             entity.HasIndex(item => item.OrderId).IsUnique();
+            entity.HasIndex(item => new { item.Status, item.PaidAt });
             entity.HasOne<Order>().WithMany().HasForeignKey(item => item.OrderId).OnDelete(DeleteBehavior.Cascade);
         });
 

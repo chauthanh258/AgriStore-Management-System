@@ -10,6 +10,7 @@ public sealed record CreateCustomerRequest(
 
     [param: Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
     [param: StringLength(30)]
+    [param: RegularExpression(@"^0\d{9,10}$", ErrorMessage = "Số điện thoại không hợp lệ.")]
     string Phone,
 
     [param: EmailAddress(ErrorMessage = "Email không hợp lệ.")]
@@ -27,6 +28,7 @@ public sealed record UpdateCustomerRequest(
 
     [param: Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
     [param: StringLength(30)]
+    [param: RegularExpression(@"^0\d{9,10}$", ErrorMessage = "Số điện thoại không hợp lệ.")]
     string Phone,
 
     [param: EmailAddress(ErrorMessage = "Email không hợp lệ.")]
@@ -49,6 +51,7 @@ public sealed record CreateAddressRequest(
 
     [param: Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
     [param: StringLength(30)]
+    [param: RegularExpression(@"^0\d{9,10}$", ErrorMessage = "Số điện thoại không hợp lệ.")]
     string Phone,
 
     [param: Required]
@@ -76,6 +79,7 @@ public sealed record UpdateAddressRequest(
 
     [param: Required]
     [param: StringLength(30)]
+    [param: RegularExpression(@"^0\d{9,10}$", ErrorMessage = "Số điện thoại không hợp lệ.")]
     string Phone,
 
     [param: Required]
@@ -92,4 +96,5 @@ public sealed record UpdateAddressRequest(
 
     [param: Required]
     [param: StringLength(500)]
+    [param: MinLength(3)]
     string DetailAddress);

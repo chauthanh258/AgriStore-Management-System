@@ -8,7 +8,7 @@ namespace AgriStore.Api.Controllers;
 
 /// <summary>API quản lý đơn vị tính.</summary>
 [ApiController]
-// [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+[Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
 [Route("api/units")]
 public sealed class UnitsController(IUnitService unitService) : ControllerBase
 {

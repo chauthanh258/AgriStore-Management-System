@@ -4,6 +4,9 @@ namespace AgriStore.Api.Services;
 
 public interface IPurchaseOrderService
 {
+    Task<PurchaseOrderListResponse> GetPagedAsync(
+        PurchaseOrderListQuery query,
+        CancellationToken cancellationToken);
     Task<PurchaseOrderResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
     Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> CreateAsync(
         PurchaseOrderRequest request,
@@ -12,12 +15,6 @@ public interface IPurchaseOrderService
         Guid id,
         PurchaseOrderRequest request,
         CancellationToken cancellationToken);
-<<<<<<< HEAD
-    Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
-        Guid id,
-        ReceivePurchaseOrderRequest request,
-        Guid? createdBy,
-=======
     Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> AddDetailAsync(
         Guid id,
         PurchaseOrderLineRequest request,
@@ -31,13 +28,8 @@ public interface IPurchaseOrderService
         CancellationToken cancellationToken);
     Task<PurchaseOrderServiceResult<PurchaseOrderResponse>> ReceiveAsync(
         Guid id,
-<<<<<<< HEAD
-        PurchaseOrderReceiveRequest request,
->>>>>>> main
-=======
         ReceivePurchaseOrderRequest request,
         Guid? createdBy,
->>>>>>> main
         CancellationToken cancellationToken);
 }
 

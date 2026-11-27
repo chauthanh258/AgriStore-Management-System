@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using AgriStore.Api.DTOs.PurchaseOrders;
+using AgriStore.Api.Security;
 using Microsoft.AspNetCore.Authorization;
 using AgriStore.Api.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -7,11 +8,19 @@ using Microsoft.AspNetCore.Mvc;
 namespace AgriStore.Api.Controllers;
 
 [ApiController]
-[Authorize(Roles = "Admin,Manager,Staff")]
 [Route("api/purchase-orders")]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrderService) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(PurchaseOrderListResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PurchaseOrderListResponse>> GetAll(
+        [FromQuery] PurchaseOrderListQuery query,
+        CancellationToken cancellationToken)
+    {
+        return Ok(await purchaseOrderService.GetPagedAsync(query, cancellationToken));
+    }
+
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -45,6 +54,46 @@ public sealed class PurchaseOrdersController(IPurchaseOrderService purchaseOrder
         CancellationToken cancellationToken)
     {
         var result = await purchaseOrderService.UpdateAsync(id, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("{id:guid}/details")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> AddDetail(
+        Guid id,
+        PurchaseOrderLineRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.AddDetailAsync(id, request, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpDelete("{id:guid}/details/{detailId:guid}")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> RemoveDetail(
+        Guid id,
+        Guid detailId,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.RemoveDetailAsync(id, detailId, cancellationToken);
+        return result.Succeeded ? Ok(result.Value) : Problem(result);
+    }
+
+    [HttpPost("{id:guid}/order")]
+    [ProducesResponseType(typeof(PurchaseOrderResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<PurchaseOrderResponse>> MarkOrdered(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var result = await purchaseOrderService.MarkOrderedAsync(id, cancellationToken);
         return result.Succeeded ? Ok(result.Value) : Problem(result);
     }
 

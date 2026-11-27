@@ -165,6 +165,10 @@ public sealed class ProductService(
             normalized.Name,
             request.CategoryId,
             request.UnitId,
+            request.CostPrice,
+            request.SellingPrice,
+            request.MinStockAlert,
+            request.ExpiryDays,
             null,
             cancellationToken);
 
@@ -225,6 +229,10 @@ public sealed class ProductService(
             normalized.Name,
             request.CategoryId,
             request.UnitId,
+            request.CostPrice,
+            request.SellingPrice,
+            request.MinStockAlert,
+            request.ExpiryDays,
             id,
             cancellationToken);
 
@@ -415,12 +423,48 @@ public sealed class ProductService(
         string name,
         Guid categoryId,
         Guid unitId,
+        decimal costPrice,
+        decimal sellingPrice,
+        decimal minStockAlert,
+        int? expiryDays,
         Guid? excludedId,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(code) ||
+            code.Length > 50 ||
+            !System.Text.RegularExpressions.Regex.IsMatch(
+                code,
+                @"^[A-Z0-9]+(?:[._-][A-Z0-9]+)*$",
+                System.Text.RegularExpressions.RegexOptions.CultureInvariant))
         {
-            return (400, "Mã và tên sản phẩm không được để trống.");
+            return (400, "Mã sản phẩm chỉ được chứa chữ cái, chữ số, dấu chấm, gạch dưới hoặc gạch ngang; tối đa 50 ký tự.");
+        }
+
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+        {
+            return (400, "Tên sản phẩm không được để trống và tối đa 200 ký tự.");
+        }
+
+        if (costPrice < 0 || costPrice > 9999999999999999.99m || decimal.Round(costPrice, 2) != costPrice)
+        {
+            return (400, "Giá vốn phải không âm và có tối đa 2 chữ số thập phân.");
+        }
+
+        if (sellingPrice <= 0 || sellingPrice > 9999999999999999.99m || decimal.Round(sellingPrice, 2) != sellingPrice)
+        {
+            return (400, "Giá bán phải lớn hơn 0 và có tối đa 2 chữ số thập phân.");
+        }
+
+        if (minStockAlert < 0 ||
+            minStockAlert > 999999999999999.999m ||
+            decimal.Round(minStockAlert, 3) != minStockAlert)
+        {
+            return (400, "Ngưỡng tồn kho phải không âm và có tối đa 3 chữ số thập phân.");
+        }
+
+        if (expiryDays is <= 0)
+        {
+            return (400, "Số ngày hạn sử dụng phải lớn hơn 0.");
         }
 
         if (categoryId == Guid.Empty || unitId == Guid.Empty)
@@ -429,7 +473,8 @@ public sealed class ProductService(
         }
 
         if (await dbContext.Products.AsNoTracking().AnyAsync(
-                product => product.Code == code && (!excludedId.HasValue || product.Id != excludedId.Value),
+                product => product.Code.Trim().ToUpper() == code &&
+                    (!excludedId.HasValue || product.Id != excludedId.Value),
                 cancellationToken))
         {
             return (409, "Mã sản phẩm đã tồn tại.");
@@ -455,7 +500,7 @@ public sealed class ProductService(
         string? shortDescription)
     {
         return (
-            code?.Trim() ?? string.Empty,
+            code?.Trim().ToUpperInvariant() ?? string.Empty,
             name?.Trim() ?? string.Empty,
             NormalizeOptional(description),
             NormalizeOptional(shortDescription));

@@ -5,6 +5,7 @@ using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
 using AgriStore.Api.Security;
 using AgriStore.Api.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -85,16 +86,10 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(AuthorizationPolicies.ManageRoles, policy => policy.RequireRole(SystemRoles.Admin));
-    options.AddPolicy(AuthorizationPolicies.ManageUsers, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
-    options.AddPolicy(AuthorizationPolicies.AssignRoles, policy => policy.RequireRole(SystemRoles.Admin));
-    options.AddPolicy(AuthorizationPolicies.ViewProducts, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager, SystemRoles.Customer));
-    options.AddPolicy(AuthorizationPolicies.ManageProducts, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
-    options.AddPolicy(AuthorizationPolicies.ManageOperations, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager, SystemRoles.Staff));
-    options.AddPolicy(AuthorizationPolicies.ManageCatalog, policy => policy.RequireRole(SystemRoles.Admin, SystemRoles.Manager));
-});
+builder.Services.AddAuthorization();
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, PermissionPolicyProvider>();
+builder.Services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
@@ -104,11 +99,15 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
 builder.Services.AddScoped<IProductImageStorage, ProductImageStorage>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IStockTransactionService, StockTransactionService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<IDeliveryService, DeliveryService>();
+builder.Services.AddScoped<IReportService, ReportService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -171,3 +170,5 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+public partial class Program { }

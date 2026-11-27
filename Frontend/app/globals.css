@@ -30,6 +30,9 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
+  scrollbar-color: var(--line) var(--bg);
+  scrollbar-width: thin;
+  scrollbar-gutter: stable;
 }
 
 button,

@@ -14,6 +14,11 @@ public interface ICustomerService
         CancellationToken cancellationToken
     );
 
+    Task<Guid?> GetIdByUserIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken
+    );
+
     Task<CustomerResponse> CreateAsync(
         CreateCustomerRequest request,
         CancellationToken cancellationToken
@@ -33,6 +38,10 @@ public interface ICustomerService
         Guid customerId,
         CancellationToken cancellationToken
     );
+
+    Task<AddressBookResponse> GetAddressBookAsync(
+        AddressBookQuery query,
+        CancellationToken cancellationToken);
 
     Task<AddressResponse?> CreateAddressAsync(
         Guid customerId,

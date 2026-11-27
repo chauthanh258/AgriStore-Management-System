@@ -9,7 +9,7 @@ namespace AgriStore.Api.Controllers;
 
 /// <summary>API tạo và tra cứu giao dịch kho.</summary>
 [ApiController]
-// [Authorize(Policy = AuthorizationPolicies.ManageOperations)]
+[Authorize(Policy = AuthorizationPolicies.ManageOperations)]
 [Route("api/stock-transactions")]
 public sealed class StockTransactionsController(IStockTransactionService stockTransactionService) : ControllerBase
 {

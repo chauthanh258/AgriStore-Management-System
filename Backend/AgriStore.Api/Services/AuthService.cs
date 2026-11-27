@@ -1,15 +1,19 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using AgriStore.Api.Data;
 using AgriStore.Api.Domain.Entities;
 using AgriStore.Api.DTOs.Auth;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 
 namespace AgriStore.Api.Services;
 
 public sealed class AuthService(
     IConfiguration configuration,
+    ApplicationDbContext dbContext,
     UserManager<ApplicationUser> userManager,
     RoleManager<ApplicationRole> roleManager,
     SignInManager<ApplicationUser> signInManager) : IAuthService
@@ -39,32 +43,67 @@ public sealed class AuthService(
                 "Role Customer chưa được khởi tạo.");
         }
 
+        var phone = request.PhoneNumber.Trim();
+        var phoneExists = await dbContext.Customers
+            .AnyAsync(customer => customer.Phone == phone, cancellationToken);
+        if (phoneExists)
+        {
+            return AuthServiceResult<RegisterResponse>.Failure(
+                StatusCodes.Status409Conflict,
+                "Số điện thoại đã được sử dụng.");
+        }
+
         var user = new ApplicationUser
         {
             UserName = email,
             Email = email,
             FullName = request.FullName.Trim(),
-            PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber)
-                ? null
-                : request.PhoneNumber.Trim(),
+            PhoneNumber = phone,
             IsActive = true
         };
 
-        var createResult = await userManager.CreateAsync(user, request.Password);
-        if (!createResult.Succeeded)
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+        try
         {
-            return AuthServiceResult<RegisterResponse>.Failure(
-                StatusCodes.Status400BadRequest,
-                createResult.Errors.Select(error => error.Description).ToArray());
-        }
+            var createResult = await userManager.CreateAsync(user, request.Password);
+            if (!createResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return AuthServiceResult<RegisterResponse>.Failure(
+                    StatusCodes.Status400BadRequest,
+                    createResult.Errors.Select(error => error.Description).ToArray());
+            }
 
-        var roleResult = await userManager.AddToRoleAsync(user, CustomerRole);
-        if (!roleResult.Succeeded)
+            var roleResult = await userManager.AddToRoleAsync(user, CustomerRole);
+            if (!roleResult.Succeeded)
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                return AuthServiceResult<RegisterResponse>.Failure(
+                    StatusCodes.Status500InternalServerError,
+                    roleResult.Errors.Select(error => error.Description).ToArray());
+            }
+
+            dbContext.Customers.Add(new Customer
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                FullName = user.FullName,
+                Phone = phone,
+                Email = email
+            });
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (
+            exception.InnerException is PostgresException
+            {
+                SqlState: PostgresErrorCodes.UniqueViolation
+            })
         {
-            await userManager.DeleteAsync(user);
+            await transaction.RollbackAsync(cancellationToken);
             return AuthServiceResult<RegisterResponse>.Failure(
-                StatusCodes.Status500InternalServerError,
-                roleResult.Errors.Select(error => error.Description).ToArray());
+                StatusCodes.Status409Conflict,
+                "Email hoặc số điện thoại đã được sử dụng.");
         }
 
         return AuthServiceResult<RegisterResponse>.Created(new RegisterResponse(

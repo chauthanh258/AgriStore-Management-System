@@ -42,31 +42,61 @@ public sealed class OrderService(
 
         if (query.FromDate.HasValue)
         {
-            var fromDate = query.FromDate.Value.ToUniversalTime();
+            var fromDate = AsUtc(query.FromDate.Value);
             ordersQuery = ordersQuery.Where(order => order.OrderDate >= fromDate);
         }
 
         if (query.ToDate.HasValue)
         {
-            var toDate = query.ToDate.Value.Date.AddDays(1).ToUniversalTime();
+            var toDate = AsUtc(query.ToDate.Value.Date.AddDays(1));
             ordersQuery = ordersQuery.Where(order => order.OrderDate < toDate);
         }
 
         var totalCount = await ordersQuery.CountAsync(cancellationToken);
 
-        var orders = await ordersQuery
-            .OrderByDescending(order => order.OrderDate)
-            .ThenByDescending(order => order.Id)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
+        var skip = ((long)page - 1) * pageSize;
+        var orders = skip > int.MaxValue
+            ? new List<Order>()
+            : await ordersQuery
+                .OrderByDescending(order => order.OrderDate)
+                .ThenByDescending(order => order.Id)
+                .Skip((int)skip)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+        var orderIds = orders.Select(order => order.Id).ToArray();
+        var details = await (
+            from detail in dbContext.OrderDetails.AsNoTracking()
+            join product in dbContext.Products.AsNoTracking()
+                on detail.ProductId equals product.Id
+            where orderIds.Contains(detail.OrderId)
+            orderby detail.OrderId, detail.Id
+            select new
+            {
+                detail.OrderId,
+                Response = new OrderDetailResponse(
+                    detail.Id,
+                    product.Id,
+                    product.Code,
+                    product.Name,
+                    detail.Quantity,
+                    detail.UnitPrice,
+                    detail.Discount,
+                    detail.TotalPrice)
+            })
             .ToListAsync(cancellationToken);
-
-        var responses = new List<OrderResponse>();
-
-        foreach (var order in orders)
-        {
-            responses.Add(await MapOrderAsync(order, cancellationToken));
-        }
+        var detailsByOrder = details
+            .GroupBy(item => item.OrderId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyCollection<OrderDetailResponse>)group
+                    .Select(item => item.Response)
+                    .ToArray());
+        var responses = orders
+            .Select(order => MapOrder(
+                order,
+                detailsByOrder.GetValueOrDefault(order.Id) ?? Array.Empty<OrderDetailResponse>()))
+            .ToArray();
 
         var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
 
@@ -113,16 +143,31 @@ public sealed class OrderService(
         Guid? createdByUserId,
         CancellationToken cancellationToken)
     {
-        if (request.CustomerId == Guid.Empty ||
-            request.ShippingAddressId == Guid.Empty ||
+        if (request.ShippingAddressId == Guid.Empty ||
             request.ShippingMethodId == Guid.Empty)
         {
             throw new ArgumentException(
                 "Đơn online phải có khách hàng, địa chỉ và phương thức giao hàng.");
         }
 
+        if (!createdByUserId.HasValue)
+        {
+            throw new ArgumentException("Đơn online yêu cầu tài khoản khách hàng.");
+        }
+
+        var customerId = await dbContext.Customers
+            .AsNoTracking()
+            .Where(customer => customer.UserId == createdByUserId.Value)
+            .Select(customer => (Guid?)customer.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (!customerId.HasValue)
+        {
+            throw new ArgumentException("Tài khoản chưa có hồ sơ khách hàng.");
+        }
+
         return await CreateAsync(
-            request.CustomerId,
+            customerId.Value,
             request.WarehouseId,
             request.ShippingAddressId,
             request.ShippingMethodId,
@@ -260,6 +305,26 @@ public sealed class OrderService(
                 $"Không thể chuyển trạng thái từ {order.Status} sang {nextStatus}.");
         }
 
+        if (nextStatus == "Cancelled")
+        {
+            var payment = await dbContext.Payments
+                .SingleOrDefaultAsync(item => item.OrderId == order.Id, cancellationToken);
+
+            if (payment?.Status == "Paid")
+            {
+                throw new InvalidOperationException(
+                    "Cần hoàn tiền cho giao dịch trước khi hủy đơn hàng đã thanh toán.");
+            }
+
+            if (payment?.Status == "Pending")
+            {
+                payment.Status = "Failed";
+                payment.Notes = string.IsNullOrWhiteSpace(payment.Notes)
+                    ? "Đơn hàng đã bị hủy."
+                    : $"{payment.Notes} | Đơn hàng đã bị hủy.";
+            }
+        }
+
         if (order.Status == "Pending" && nextStatus == "Confirmed")
         {
             var details = await dbContext.OrderDetails
@@ -303,6 +368,10 @@ public sealed class OrderService(
         ApplyCouponRequest request,
         CancellationToken cancellationToken)
     {
+        await using var transaction = await dbContext.Database.BeginTransactionAsync(
+            IsolationLevel.Serializable,
+            cancellationToken);
+
         var order = await dbContext.Orders
             .SingleOrDefaultAsync(item => item.Id == id, cancellationToken);
 
@@ -311,16 +380,25 @@ public sealed class OrderService(
             return null;
         }
 
-        if (!string.Equals(order.Status, "Pending", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(order.Status, "Pending", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(order.Status, "Confirmed", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                "Chỉ được áp dụng mã giảm giá cho đơn hàng đang ở trạng thái Pending.");
+                "Chỉ được áp dụng mã giảm giá cho đơn hàng đang ở trạng thái Pending hoặc Confirmed.");
         }
 
         if (order.CouponId.HasValue)
         {
             throw new InvalidOperationException(
                 "Đơn hàng đã áp dụng mã giảm giá.");
+        }
+
+        if (await dbContext.Payments.AnyAsync(
+                item => item.OrderId == order.Id,
+                cancellationToken))
+        {
+            throw new InvalidOperationException(
+                "Không thể áp dụng mã giảm giá sau khi đã tạo giao dịch thanh toán.");
         }
 
         var code = request.Code.Trim();
@@ -362,9 +440,6 @@ public sealed class OrderService(
 
         discountAmount = Math.Clamp(discountAmount, 0m, order.SubTotal);
 
-        await using var transaction = await dbContext.Database
-            .BeginTransactionAsync(cancellationToken);
-
         var couponUsageUpdated = await dbContext.Coupons
             .Where(item => item.Id == coupon.Id &&
                            (!item.UsageLimit.HasValue || item.UsedCount < item.UsageLimit.Value))
@@ -379,7 +454,7 @@ public sealed class OrderService(
 
         var orderUpdated = await dbContext.Orders
             .Where(item => item.Id == id &&
-                           item.Status == "Pending" &&
+                           (item.Status == "Pending" || item.Status == "Confirmed") &&
                            item.CouponId == null)
             .ExecuteUpdateAsync(
                 setters => setters
@@ -649,6 +724,13 @@ public sealed class OrderService(
                 detail.TotalPrice))
             .ToListAsync(cancellationToken);
 
+        return MapOrder(order, details);
+    }
+
+    private static OrderResponse MapOrder(
+        Order order,
+        IReadOnlyCollection<OrderDetailResponse> details)
+    {
         return new OrderResponse(
             order.Id,
             order.Code,
@@ -674,9 +756,7 @@ public sealed class OrderService(
         {
             ("Pending", "Confirmed") => true,
             ("Pending", "Cancelled") => true,
-            ("Confirmed", "Shipping") => true,
             ("Confirmed", "Cancelled") => true,
-            ("Shipping", "Completed") => true,
             _ => false
         };
     }
@@ -712,4 +792,9 @@ public sealed class OrderService(
     {
         return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
+
+    private static DateTime AsUtc(DateTime value) =>
+        value.Kind == DateTimeKind.Unspecified
+            ? DateTime.SpecifyKind(value, DateTimeKind.Utc)
+            : value.ToUniversalTime();
 }
