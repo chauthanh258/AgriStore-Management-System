@@ -4,26 +4,46 @@ import { useParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ProductGallery } from "../../../../components/(user)/product/product-gallery";
 import { ProductPurchasePanel } from "../../../../components/(user)/product/product-purchase-panel";
+import { ProductReviews } from "../../../../components/(user)/product/product-reviews";
 import { productRepository } from "../../../../services/products/product.repository";
 import type { Product } from "../../../../types/api";
 
 function ProductDetailContent() {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
+  const [loadedProductId, setLoadedProductId] = useState("");
   useEffect(() => {
+    let active = true;
     productRepository
       .getProductById(id)
-      .then(setProduct)
-      .catch(() => setProduct(null));
+      .then((result) => {
+        if (active) setProduct(result);
+      })
+      .catch(() => {
+        if (active) setProduct(null);
+      })
+      .finally(() => {
+        if (active) setLoadedProductId(id);
+      });
+    return () => {
+      active = false;
+    };
   }, [id]);
-  if (!product)
+  const loading = loadedProductId !== id;
+  if (loading)
     return (
       <main className="mx-auto min-h-[600px] max-w-7xl p-20 text-center text-[var(--muted)]">
-        Không tìm thấy sản phẩm.
+        Đang tải sản phẩm...
+      </main>
+    );
+  if (!product || !product.isActive)
+    return (
+      <main className="mx-auto min-h-[600px] max-w-7xl p-20 text-center text-[var(--muted)]">
+        {!product ? "Không tìm thấy sản phẩm." : "Sản phẩm hiện không kinh doanh."}
       </main>
     );
   return (
-    <main className="mx-auto w-7xl px-6 py-6">
+    <main className="mx-auto w-full max-w-7xl px-6 py-6">
       <p className="mb-5 text-[11px] text-[var(--muted)]">
         Trang chủ　›　Trái cây tươi　›　<b>{product.name}</b>
       </p>
@@ -39,6 +59,7 @@ function ProductDetailContent() {
           {product.description}
         </p>
       </section>
+      <ProductReviews productId={product.id} />
     </main>
   );
 }

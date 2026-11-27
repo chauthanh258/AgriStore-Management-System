@@ -1,6 +1,6 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { ProductFilters } from "../../../components/(user)/product/product-filters";
 import { ProductGrid } from "../../../components/(user)/product/product-grid";
@@ -13,6 +13,10 @@ const pageSize = 9;
 
 function CatalogContent() {
   const params = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
+  const categoryFromUrl = params.get("category");
+  const category = categoryFromUrl;
   const { add } = useCart();
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<Product[]>([]);
@@ -22,7 +26,6 @@ function CatalogContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
-  const [category, setCategory] = useState<string | null>(params.get("category"));
   const [minPrice, setMinPrice] = useState<number>();
   const [maxPrice, setMaxPrice] = useState<number>();
   const [sortBy, setSortBy] = useState<ProductQuery["sortBy"]>("createdAt");
@@ -44,7 +47,9 @@ function CatalogContent() {
   }, []);
 
   useEffect(() => {
+    let active = true;
     const timer = window.setTimeout(() => {
+      if (!active) return;
       setLoading(true);
       setError(false);
       productRepository
@@ -52,6 +57,7 @@ function CatalogContent() {
           page,
           pageSize,
           search: query.trim() || undefined,
+          isActive: true,
           categoryId: category ?? undefined,
           minPrice,
           maxPrice,
@@ -60,19 +66,26 @@ function CatalogContent() {
           sortDirection
         })
         .then((result) => {
+          if (!active) return;
           setItems(result.items);
           setTotalCount(result.totalCount);
           setTotalPages(Math.max(result.totalPages, 1));
         })
         .catch(() => {
+          if (!active) return;
           setItems([]);
           setTotalCount(0);
           setTotalPages(1);
           setError(true);
         })
-        .finally(() => setLoading(false));
+        .finally(() => {
+          if (active) setLoading(false);
+        });
     }, 250);
-    return () => window.clearTimeout(timer);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [query, category, minPrice, maxPrice, sortBy, sortDirection, page, params]);
 
   const selectedCategoryName = useMemo(
@@ -81,7 +94,7 @@ function CatalogContent() {
   );
 
   function resetFilters() {
-    setCategory(null);
+    selectCategory(null);
     setMinPrice(undefined);
     setMaxPrice(undefined);
     setQuery("");
@@ -89,7 +102,16 @@ function CatalogContent() {
   }
 
   function selectCategory(id: string | null) {
-    setCategory(id);
+    const nextParams = new URLSearchParams(params.toString());
+    if (id) {
+      nextParams.set("category", id);
+    } else {
+      nextParams.delete("category");
+    }
+    const queryString = nextParams.toString();
+    router.replace(queryString ? `${pathname}?${queryString}` : pathname, {
+      scroll: false
+    });
     setPage(1);
   }
 
