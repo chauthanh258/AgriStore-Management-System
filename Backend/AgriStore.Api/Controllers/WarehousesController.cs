@@ -13,18 +13,18 @@ public sealed class WarehousesController(IWarehouseService warehouseService) : C
 {
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<WarehouseResponse>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
-        var result = await warehouseService.GetAllAsync();
+        var result = await warehouseService.GetAllAsync(cancellationToken);
         return Ok(result);
     }
 
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(WarehouseResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await warehouseService.GetByIdAsync(id);
+        var result = await warehouseService.GetByIdAsync(id, cancellationToken);
         if (result == null) return NotFound(new { message = "Không tìm thấy kho hàng." });
         return Ok(result);
     }
@@ -32,29 +32,53 @@ public sealed class WarehousesController(IWarehouseService warehouseService) : C
     [HttpPost]
     [ProducesResponseType(typeof(WarehouseResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Create([FromBody] CreateWarehouseRequest request)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Create(
+        [FromBody] CreateWarehouseRequest request,
+        CancellationToken cancellationToken)
     {
-        var result = await warehouseService.CreateAsync(request);
-        return CreatedAtAction(nameof(GetById), new { id = result.Id }, result);
+        var result = await warehouseService.CreateAsync(request, cancellationToken);
+        return result.Succeeded
+            ? CreatedAtAction(nameof(GetById), new { id = result.Value!.Id }, result.Value)
+            : Problem(result);
     }
 
     [HttpPut("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateWarehouseRequest request)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Update(
+        Guid id,
+        [FromBody] UpdateWarehouseRequest request,
+        CancellationToken cancellationToken)
     {
-        var success = await warehouseService.UpdateAsync(id, request);
-        if (!success) return NotFound(new { message = "Không tìm thấy kho hàng để cập nhật." });
-        return Ok(new { message = "Cập nhật thông tin kho thành công." });
+        var result = await warehouseService.UpdateAsync(id, request, cancellationToken);
+        return result.Succeeded
+            ? Ok(new { message = "Cập nhật thông tin kho thành công." })
+            : Problem(result);
     }
 
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Delete(Guid id)
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
-        var success = await warehouseService.DeleteAsync(id);
-        if (!success) return NotFound(new { message = "Không tìm thấy kho hàng để xóa." });
-        return NoContent();
+        var result = await warehouseService.DeleteAsync(id, cancellationToken);
+        return result.Succeeded ? NoContent() : Problem(result);
+    }
+
+    private ObjectResult Problem<T>(WarehouseServiceResult<T> result)
+    {
+        var details = new ProblemDetails
+        {
+            Status = result.StatusCode,
+            Title = "Không thể hoàn tất yêu cầu quản lý kho.",
+            Detail = string.Join(" ", result.Errors),
+            Instance = HttpContext.Request.Path
+        };
+
+        return StatusCode(result.StatusCode, details);
     }
 }

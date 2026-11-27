@@ -9,6 +9,11 @@ public interface IStockTransactionService
         Guid? createdBy,
         CancellationToken cancellationToken);
 
+    Task<StockTransactionServiceResult<StockTransferResponse>> TransferAsync(
+        CreateStockTransferRequest request,
+        Guid? createdBy,
+        CancellationToken cancellationToken);
+
     Task<StockTransactionResponse?> GetByIdAsync(
         Guid batchId,
         CancellationToken cancellationToken);
