@@ -123,6 +123,174 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
         return StockTransactionServiceResult<StockTransactionResponse>.Success(response!, 201);
     }
 
+    public async Task<StockTransactionServiceResult<StockTransferResponse>> TransferAsync(
+        CreateStockTransferRequest request,
+        Guid? createdBy,
+        CancellationToken cancellationToken)
+    {
+        var validation = ValidateTransferRequest(request);
+        if (validation.Count > 0)
+        {
+            return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                validation.ToArray());
+        }
+
+        await using var transaction = dbContext.Database.CurrentTransaction is null
+            ? await dbContext.Database.BeginTransactionAsync(
+                IsolationLevel.Serializable,
+                cancellationToken)
+            : null;
+
+        var existingRows = await dbContext.StockTransactions
+            .AsNoTracking()
+            .Where(item =>
+                item.ReferenceType == "Transfer" &&
+                item.ReferenceId == request.TransferId &&
+                item.BatchId.HasValue)
+            .ToListAsync(cancellationToken);
+
+        if (existingRows.Count > 0)
+        {
+            var replayResult = await GetTransferReplayResultAsync(
+                request,
+                existingRows,
+                cancellationToken);
+            if (transaction is not null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+            }
+
+            return replayResult;
+        }
+
+        var warehouses = await dbContext.Warehouses
+            .Where(item =>
+                (item.Id == request.SourceWarehouseId || item.Id == request.DestinationWarehouseId) &&
+                item.IsActive)
+            .ToDictionaryAsync(item => item.Id, cancellationToken);
+        if (warehouses.Count != 2)
+        {
+            return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                "Kho nguồn hoặc kho đích không tồn tại hay đã ngừng hoạt động.");
+        }
+
+        var productIds = request.Lines.Select(line => line.ProductId).ToArray();
+        var activeProductCount = await dbContext.Products
+            .CountAsync(item => productIds.Contains(item.Id) && item.IsActive, cancellationToken);
+        if (activeProductCount != productIds.Length)
+        {
+            return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                StatusCodes.Status400BadRequest,
+                "Một hoặc nhiều sản phẩm không tồn tại hoặc đã ngừng hoạt động.");
+        }
+
+        var sourceInventories = await dbContext.Inventories
+            .Where(item =>
+                item.WarehouseId == request.SourceWarehouseId &&
+                productIds.Contains(item.ProductId))
+            .ToDictionaryAsync(item => item.ProductId, cancellationToken);
+        var destinationInventories = await dbContext.Inventories
+            .Where(item =>
+                item.WarehouseId == request.DestinationWarehouseId &&
+                productIds.Contains(item.ProductId))
+            .ToDictionaryAsync(item => item.ProductId, cancellationToken);
+
+        foreach (var line in request.Lines)
+        {
+            if (!sourceInventories.TryGetValue(line.ProductId, out var sourceInventory) ||
+                sourceInventory.Quantity - line.Quantity < sourceInventory.ReservedQuantity)
+            {
+                return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                    StatusCodes.Status409Conflict,
+                    $"Sản phẩm {line.ProductId} không đủ tồn khả dụng tại kho nguồn.");
+            }
+        }
+
+        var transferId = request.TransferId;
+        var outboundBatchId = Guid.NewGuid();
+        var inboundBatchId = Guid.NewGuid();
+        var referenceType = "Transfer";
+        var notes = Normalize(request.Notes);
+        var outboundTransactions = new List<StockTransaction>(request.Lines.Count);
+        var inboundTransactions = new List<StockTransaction>(request.Lines.Count);
+
+        foreach (var line in request.Lines)
+        {
+            var sourceInventory = sourceInventories[line.ProductId];
+            var sourceBefore = sourceInventory.Quantity;
+            var sourceAfter = sourceBefore - line.Quantity;
+            sourceInventory.Quantity = sourceAfter;
+
+            if (!destinationInventories.TryGetValue(line.ProductId, out var destinationInventory))
+            {
+                destinationInventory = new Inventory
+                {
+                    Id = Guid.NewGuid(),
+                    ProductId = line.ProductId,
+                    WarehouseId = request.DestinationWarehouseId,
+                    Quantity = 0m,
+                    ReservedQuantity = 0m
+                };
+                dbContext.Inventories.Add(destinationInventory);
+                destinationInventories.Add(line.ProductId, destinationInventory);
+            }
+
+            var destinationBefore = destinationInventory.Quantity;
+            var destinationAfter = destinationBefore + line.Quantity;
+            destinationInventory.Quantity = destinationAfter;
+
+            outboundTransactions.Add(new StockTransaction
+            {
+                Id = Guid.NewGuid(),
+                BatchId = outboundBatchId,
+                ProductId = line.ProductId,
+                WarehouseId = request.SourceWarehouseId,
+                TransactionType = StockTransactionTypes.Export,
+                Quantity = -line.Quantity,
+                QuantityBefore = sourceBefore,
+                QuantityAfter = sourceAfter,
+                ReferenceType = referenceType,
+                ReferenceId = transferId,
+                Notes = notes,
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow
+            });
+            inboundTransactions.Add(new StockTransaction
+            {
+                Id = Guid.NewGuid(),
+                BatchId = inboundBatchId,
+                ProductId = line.ProductId,
+                WarehouseId = request.DestinationWarehouseId,
+                TransactionType = StockTransactionTypes.Import,
+                Quantity = line.Quantity,
+                QuantityBefore = destinationBefore,
+                QuantityAfter = destinationAfter,
+                ReferenceType = referenceType,
+                ReferenceId = transferId,
+                Notes = notes,
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow
+            });
+        }
+
+        dbContext.StockTransactions.AddRange(outboundTransactions);
+        dbContext.StockTransactions.AddRange(inboundTransactions);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var outbound = await GetByIdAsync(outboundBatchId, cancellationToken);
+        var inbound = await GetByIdAsync(inboundBatchId, cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+        return StockTransactionServiceResult<StockTransferResponse>.Success(
+            new StockTransferResponse(transferId, outbound!, inbound!),
+            StatusCodes.Status201Created);
+    }
+
     public async Task<StockTransactionResponse?> GetByIdAsync(
         Guid batchId,
         CancellationToken cancellationToken)
@@ -284,7 +452,7 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
             else if (transactionType == StockTransactionTypes.Count)
             {
                 if (!line.CountedQuantity.HasValue || line.CountedQuantity < 0 ||
-                    line.Quantity != 0 || line.Adjustment.HasValue)
+                    line.Quantity.HasValue || line.Adjustment.HasValue)
                 {
                     errors.Add("Count yêu cầu CountedQuantity không âm và không nhận Quantity/Adjustment.");
                     break;
@@ -319,6 +487,102 @@ public sealed class StockTransactionService(ApplicationDbContext dbContext) : IS
         }
 
         return errors;
+    }
+
+    private static List<string> ValidateTransferRequest(CreateStockTransferRequest request)
+    {
+        var errors = new List<string>();
+        if (request.TransferId == Guid.Empty)
+        {
+            errors.Add("TransferId không được để trống.");
+        }
+
+        if (request.SourceWarehouseId == Guid.Empty || request.DestinationWarehouseId == Guid.Empty)
+        {
+            errors.Add("Kho nguồn và kho đích là bắt buộc.");
+        }
+
+        if (request.SourceWarehouseId == request.DestinationWarehouseId)
+        {
+            errors.Add("Kho nguồn và kho đích phải khác nhau.");
+        }
+
+        if (request.Lines is null || request.Lines.Count == 0)
+        {
+            errors.Add("Giao dịch chuyển kho phải có ít nhất một sản phẩm.");
+            return errors;
+        }
+
+        if (request.Lines.Any(line =>
+                line.ProductId == Guid.Empty ||
+                line.Quantity <= 0m ||
+                decimal.Round(line.Quantity, 3) != line.Quantity))
+        {
+            errors.Add("Mỗi dòng chuyển kho phải có sản phẩm hợp lệ và số lượng lớn hơn 0, tối đa 3 chữ số thập phân.");
+        }
+
+        if (request.Lines.GroupBy(line => line.ProductId).Any(group => group.Count() > 1))
+        {
+            errors.Add("Không được thêm trùng sản phẩm trong một giao dịch chuyển kho.");
+        }
+
+        if (request.Notes?.Length > 2000)
+        {
+            errors.Add("Ghi chú chuyển kho không được vượt quá 2000 ký tự.");
+        }
+
+        return errors;
+    }
+
+    private async Task<StockTransactionServiceResult<StockTransferResponse>> GetTransferReplayResultAsync(
+        CreateStockTransferRequest request,
+        IReadOnlyCollection<StockTransaction> existingRows,
+        CancellationToken cancellationToken)
+    {
+        var outboundRows = existingRows
+            .Where(item => item.TransactionType == StockTransactionTypes.Export)
+            .ToArray();
+        var inboundRows = existingRows
+            .Where(item => item.TransactionType == StockTransactionTypes.Import)
+            .ToArray();
+        var expectedLines = request.Lines.ToDictionary(line => line.ProductId);
+        var expectedNotes = Normalize(request.Notes);
+        var matchesRequest =
+            outboundRows.Length == expectedLines.Count &&
+            inboundRows.Length == expectedLines.Count &&
+            outboundRows.All(row =>
+                row.WarehouseId == request.SourceWarehouseId &&
+                expectedLines.TryGetValue(row.ProductId, out var line) &&
+                row.Quantity == -line.Quantity &&
+                row.Notes == expectedNotes) &&
+            inboundRows.All(row =>
+                row.WarehouseId == request.DestinationWarehouseId &&
+                expectedLines.TryGetValue(row.ProductId, out var line) &&
+                row.Quantity == line.Quantity &&
+                row.Notes == expectedNotes) &&
+            outboundRows.Select(row => row.BatchId).Distinct().Count() == 1 &&
+            inboundRows.Select(row => row.BatchId).Distinct().Count() == 1 &&
+            outboundRows[0].BatchId != inboundRows[0].BatchId;
+
+        if (!matchesRequest)
+        {
+            return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                StatusCodes.Status409Conflict,
+                "TransferId đã được sử dụng cho một yêu cầu chuyển kho khác hoặc giao dịch không toàn vẹn.");
+        }
+
+        var outbound = await GetByIdAsync(outboundRows[0].BatchId!.Value, cancellationToken);
+        var inbound = await GetByIdAsync(inboundRows[0].BatchId!.Value, cancellationToken);
+        if (outbound is null || inbound is null)
+        {
+            return StockTransactionServiceResult<StockTransferResponse>.Failure(
+                StatusCodes.Status409Conflict,
+                "Không thể khôi phục đầy đủ giao dịch chuyển kho đã tồn tại.");
+        }
+
+        return StockTransactionServiceResult<StockTransferResponse>.Success(
+            new StockTransferResponse(request.TransferId, outbound, inbound),
+            StatusCodes.Status200OK);
     }
 
     private async Task<StockTransactionResponse> MapAsync(

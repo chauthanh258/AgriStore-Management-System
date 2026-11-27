@@ -4,7 +4,7 @@ namespace AgriStore.Api.DTOs.Warehouses;
 
 public class CreateWarehouseRequest
 {
-    [Required(ErrorMessage = "Tên kho không được để trống")]
+    [Required(ErrorMessage = "Tên kho không được để trống"), StringLength(200)]
     public string Name { get; set; } = string.Empty;
 
     public string? Address { get; set; }

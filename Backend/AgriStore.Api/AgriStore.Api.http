@@ -2,6 +2,8 @@
 @userId = 00000000-0000-0000-0000-000000000000
 @roleId = 00000000-0000-0000-0000-000000000000
 @warehouseId = 00000000-0000-0000-0000-000000000000
+@destinationWarehouseId = 00000000-0000-0000-0000-000000000001
+@transferId = 00000000-0000-0000-0000-000000000002
 @purchaseOrderId = 00000000-0000-0000-0000-000000000000
 @purchaseOrderDetailId = 00000000-0000-0000-0000-000000000000
 @productId = 00000000-0000-0000-0000-000000000000
@@ -79,6 +81,41 @@ Content-Type: application/json
 		{
 			"productId": "{{productId}}",
 			"adjustment": -1
+		}
+	]
+}
+
+### Chuyển kho (hai giao dịch xuất/nhập đối ứng, cùng tham chiếu chuyển kho)
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions/transfer
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"transferId": "{{transferId}}",
+	"sourceWarehouseId": "{{warehouseId}}",
+	"destinationWarehouseId": "{{destinationWarehouseId}}",
+	"notes": "Điều chuyển hàng giữa hai kho",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"quantity": 5
+		}
+	]
+}
+
+### Chuyển kho không hợp lệ (kho nguồn và kho đích phải khác nhau)
+POST {{AgriStore.Api_HostAddress}}/api/stock-transactions/transfer
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+	"transferId": "00000000-0000-0000-0000-000000000003",
+	"sourceWarehouseId": "{{warehouseId}}",
+	"destinationWarehouseId": "{{warehouseId}}",
+	"lines": [
+		{
+			"productId": "{{productId}}",
+			"quantity": 1
 		}
 	]
 }

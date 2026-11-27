@@ -55,6 +55,33 @@ public sealed class StockTransactionsController(IStockTransactionService stockTr
             : Problem(result);
     }
 
+    /// <summary>Chuyển hàng nguyên tử giữa hai kho, tạo giao dịch xuất và nhập đối ứng.</summary>
+    [HttpPost("transfer")]
+    [ProducesResponseType(typeof(StockTransferResponse), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<StockTransferResponse>> Transfer(
+        CreateStockTransferRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await stockTransactionService.TransferAsync(
+            request,
+            GetCurrentUserId(),
+            cancellationToken);
+
+        if (!result.Succeeded)
+        {
+            return Problem(result);
+        }
+
+        return result.StatusCode == StatusCodes.Status201Created
+            ? CreatedAtAction(
+                nameof(GetById),
+                new { batchId = result.Value!.OutboundTransaction.BatchId },
+                result.Value)
+            : Ok(result.Value);
+    }
+
     private Guid? GetCurrentUserId()
     {
         var userIdValue = User.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -63,7 +90,7 @@ public sealed class StockTransactionsController(IStockTransactionService stockTr
         return Guid.TryParse(userIdValue, out var userId) ? userId : null;
     }
 
-    private ObjectResult Problem(StockTransactionServiceResult<StockTransactionResponse> result)
+    private ObjectResult Problem<T>(StockTransactionServiceResult<T> result)
     {
         var details = new ProblemDetails
         {
