@@ -5,6 +5,7 @@ import type {
   StockTransferRequest,
   StockTransferResponse,
   StockTransaction,
+  StockTransactionQuery,
   StockTransactionRequest
 } from "../../types/api";
 
@@ -23,8 +24,13 @@ export async function createStockTransfer(request: StockTransferRequest) {
   return response.data;
 }
 
-export async function getStockTransactions(params: Record<string, string | number | undefined> = {}) {
+export async function getStockTransactions(params: StockTransactionQuery = {}) {
   const response = await apiClient.get<PaginatedResponse<StockTransaction>>("/api/stock-transactions", { params });
+  return response.data;
+}
+
+export async function getStockTransactionByBatchId(batchId: string) {
+  const response = await apiClient.get<StockTransaction>(`/api/stock-transactions/${batchId}`);
   return response.data;
 }
 

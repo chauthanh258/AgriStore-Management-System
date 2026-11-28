@@ -1,7 +1,10 @@
 import apiClient from "../../lib/axios/client";
-import type { CreateWarehouseRequest, Warehouse } from "../../types/api";
-
-export type WarehouseRequest = Omit<Warehouse, "id">;
+import type {
+  CreateWarehouseRequest,
+  UpdateWarehouseRequest,
+  UpdateWarehouseResponse,
+  Warehouse
+} from "../../types/api";
 
 export async function getWarehouses() {
   const response = await apiClient.get<Warehouse[]>("/api/warehouses");
@@ -18,11 +21,11 @@ export async function createWarehouse(request: CreateWarehouseRequest) {
   return response.data;
 }
 
-export async function updateWarehouse(id: string, request: WarehouseRequest) {
-  const response = await apiClient.put<Warehouse>(`/api/warehouses/${id}`, request);
+export async function updateWarehouse(id: string, request: UpdateWarehouseRequest) {
+  const response = await apiClient.put<UpdateWarehouseResponse>(`/api/warehouses/${id}`, request);
   return response.data;
 }
 
 export async function deleteWarehouse(id: string) {
-  await apiClient.delete(`/api/warehouses/${id}`);
+  await apiClient.delete<void>(`/api/warehouses/${id}`);
 }
