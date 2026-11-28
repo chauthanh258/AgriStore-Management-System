@@ -1,5 +1,5 @@
 import apiClient from "../../lib/axios/client";
-import type { Warehouse } from "../../types/api";
+import type { CreateWarehouseRequest, Warehouse } from "../../types/api";
 
 export type WarehouseRequest = Omit<Warehouse, "id">;
 
@@ -13,7 +13,7 @@ export async function getWarehouseById(id: string) {
   return response.data;
 }
 
-export async function createWarehouse(request: WarehouseRequest) {
+export async function createWarehouse(request: CreateWarehouseRequest) {
   const response = await apiClient.post<Warehouse>("/api/warehouses", request);
   return response.data;
 }

@@ -13,6 +13,7 @@ public sealed class InventoryService(ApplicationDbContext context) : IInventoryS
         var inventoryQuery = BuildInventoryQuery(
             query.ProductId,
             query.WarehouseId,
+            query.Search,
             lowStockOnly: false);
 
         return GetPagedAsync(inventoryQuery, query.Page, query.PageSize, cancellationToken);
@@ -25,6 +26,7 @@ public sealed class InventoryService(ApplicationDbContext context) : IInventoryS
         var inventoryQuery = BuildInventoryQuery(
             productId: null,
             query.WarehouseId,
+            query.Search,
             lowStockOnly: true);
 
         return GetPagedAsync(inventoryQuery, query.Page, query.PageSize, cancellationToken);
@@ -33,6 +35,7 @@ public sealed class InventoryService(ApplicationDbContext context) : IInventoryS
     private IQueryable<InventoryItemResponse> BuildInventoryQuery(
         Guid? productId,
         Guid? warehouseId,
+        string? search,
         bool lowStockOnly)
     {
         var query =
@@ -44,20 +47,32 @@ public sealed class InventoryService(ApplicationDbContext context) : IInventoryS
             where (!productId.HasValue || inventory.ProductId == productId.Value)
                 && (!warehouseId.HasValue || inventory.WarehouseId == warehouseId.Value)
                 && (!lowStockOnly || inventory.Quantity - inventory.ReservedQuantity <= product.MinStockAlert)
-            orderby product.Name, warehouse.Name, product.Id, warehouse.Id
-            select new InventoryItemResponse(
-                product.Id,
-                product.Code,
-                product.Name,
-                warehouse.Id,
-                warehouse.Name,
-                inventory.Quantity,
-                inventory.ReservedQuantity,
-                inventory.Quantity - inventory.ReservedQuantity,
-                product.MinStockAlert,
-                inventory.Quantity - inventory.ReservedQuantity <= product.MinStockAlert);
+            select new { inventory, product, warehouse };
 
-        return query;
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var normalizedSearch = search.Trim().ToUpperInvariant();
+            query = query.Where(item =>
+                item.product.Code.ToUpper().Contains(normalizedSearch) ||
+                item.product.Name.ToUpper().Contains(normalizedSearch));
+        }
+
+        return query
+            .OrderBy(item => item.product.Name)
+            .ThenBy(item => item.warehouse.Name)
+            .ThenBy(item => item.product.Id)
+            .ThenBy(item => item.warehouse.Id)
+            .Select(item => new InventoryItemResponse(
+                item.product.Id,
+                item.product.Code,
+                item.product.Name,
+                item.warehouse.Id,
+                item.warehouse.Name,
+                item.inventory.Quantity,
+                item.inventory.ReservedQuantity,
+                item.inventory.Quantity - item.inventory.ReservedQuantity,
+                item.product.MinStockAlert,
+                item.inventory.Quantity - item.inventory.ReservedQuantity <= item.product.MinStockAlert));
     }
 
     private static async Task<InventoryListResponse> GetPagedAsync(

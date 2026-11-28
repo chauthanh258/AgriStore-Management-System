@@ -2,17 +2,24 @@ import apiClient from "../../lib/axios/client";
 import type {
   InventoryItem,
   PaginatedResponse,
+  StockTransferRequest,
+  StockTransferResponse,
   StockTransaction,
   StockTransactionRequest
 } from "../../types/api";
 
-export async function getInventories(params: { productId?: string; warehouseId?: string; page?: number; pageSize?: number } = {}) {
+export async function getInventories(params: { productId?: string; warehouseId?: string; search?: string; page?: number; pageSize?: number } = {}) {
   const response = await apiClient.get<PaginatedResponse<InventoryItem>>("/api/inventories", { params });
   return response.data;
 }
 
-export async function getLowStock(params: { warehouseId?: string; page?: number; pageSize?: number } = {}) {
+export async function getLowStock(params: { warehouseId?: string; search?: string; page?: number; pageSize?: number } = {}) {
   const response = await apiClient.get<PaginatedResponse<InventoryItem>>("/api/inventories/low-stock", { params });
+  return response.data;
+}
+
+export async function createStockTransfer(request: StockTransferRequest) {
+  const response = await apiClient.post<StockTransferResponse>("/api/stock-transactions/transfer", request);
   return response.data;
 }
 

@@ -117,6 +117,48 @@ public sealed class InventoryWarehouseStockTransactionApiTests
     }
 
     [Fact]
+    public async Task InventoryEndpoints_SearchByProductCodeOrName_IsCaseInsensitiveAndWorksWithLowStock()
+    {
+        using var factory = new ApiTestFactory();
+        using var client = factory.CreateClient();
+        var warehouse = await CreateWarehouseAsync(client, "Kho tìm kiếm");
+        var matching = await SeedInventoryAsync(
+            factory,
+            warehouse.Id,
+            quantity: 3m,
+            minStockAlert: 3m,
+            productCode: "AGRI-KALE-01",
+            productName: "Rau Kale hữu cơ");
+        await SeedInventoryAsync(
+            factory,
+            warehouse.Id,
+            quantity: 20m,
+            productCode: "AGRI-CARROT-02",
+            productName: "Cà rốt Đà Lạt");
+
+        var codeSearch = await client.GetFromJsonAsync<InventoryListResponse>(
+            $"/api/inventories?warehouseId={warehouse.Id}&search=kale-01");
+        Assert.NotNull(codeSearch);
+        Assert.Equal(matching.ProductId, Assert.Single(codeSearch.Items).ProductId);
+
+        var nameSearch = await client.GetFromJsonAsync<InventoryListResponse>(
+            $"/api/inventories?warehouseId={warehouse.Id}&search=%20KALE%20");
+        Assert.NotNull(nameSearch);
+        Assert.Equal(matching.ProductId, Assert.Single(nameSearch.Items).ProductId);
+
+        var lowStockSearch = await client.GetFromJsonAsync<InventoryListResponse>(
+            $"/api/inventories/low-stock?warehouseId={warehouse.Id}&search=rau%20kale");
+        Assert.NotNull(lowStockSearch);
+        Assert.Equal(matching.ProductId, Assert.Single(lowStockSearch.Items).ProductId);
+
+        var noMatch = await client.GetFromJsonAsync<InventoryListResponse>(
+            $"/api/inventories?warehouseId={warehouse.Id}&search=not-found");
+        Assert.NotNull(noMatch);
+        Assert.Empty(noMatch.Items);
+        Assert.Equal(0, noMatch.TotalCount);
+    }
+
+    [Fact]
     public async Task ExportThatWouldReduceStockBelowReservedQuantity_ReturnsConflictWithoutPartialChanges()
     {
         using var factory = new ApiTestFactory();
@@ -373,15 +415,17 @@ public sealed class InventoryWarehouseStockTransactionApiTests
         Guid warehouseId,
         decimal quantity,
         decimal reservedQuantity = 0m,
-        decimal minStockAlert = 0m)
+        decimal minStockAlert = 0m,
+        string? productCode = null,
+        string? productName = null)
     {
         using var scope = factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         var product = new Product
         {
             Id = Guid.NewGuid(),
-            Code = $"TEST-{Guid.NewGuid():N}",
-            Name = $"Test product {Guid.NewGuid():N}",
+            Code = productCode ?? $"TEST-{Guid.NewGuid():N}",
+            Name = productName ?? $"Test product {Guid.NewGuid():N}",
             CategoryId = Guid.NewGuid(),
             UnitId = Guid.NewGuid(),
             IsActive = true,

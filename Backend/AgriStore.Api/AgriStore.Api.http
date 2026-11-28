@@ -554,13 +554,13 @@ Content-Type: application/json
 {
 	"isActive": true
 }
-### Tra tồn kho theo sản phẩm và/hoặc kho
-GET {{AgriStore.Api_HostAddress}}/api/inventories?productId={{productId}}&warehouseId={{warehouseId}}&page=1&pageSize=20
+### Tìm tồn kho theo SKU/tên sản phẩm và/hoặc kho
+GET {{AgriStore.Api_HostAddress}}/api/inventories?search=Kale&warehouseId={{warehouseId}}&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
 
-### Danh sách tồn kho thấp theo từng kho
-GET {{AgriStore.Api_HostAddress}}/api/inventories/low-stock?warehouseId={{warehouseId}}&page=1&pageSize=20
+### Tìm tồn kho thấp theo SKU/tên sản phẩm và/hoặc kho
+GET {{AgriStore.Api_HostAddress}}/api/inventories/low-stock?search=Kale&warehouseId={{warehouseId}}&page=1&pageSize=20
 Authorization: Bearer {{token}}
 Accept: application/json
 
