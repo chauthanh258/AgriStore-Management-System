@@ -7,6 +7,8 @@ import {
   ArrowLeftRight,
   ChevronLeft,
   ChevronRight,
+  Pencil,
+  Power,
   Plus,
   Search,
   Trash2
@@ -25,14 +27,19 @@ import {
 } from "../../../services/inventory/inventory.service";
 import {
   createWarehouse,
-  getWarehouses
+  deleteWarehouse,
+  getWarehouseById,
+  getWarehouses,
+  updateWarehouse
 } from "../../../services/warehouses/warehouse.service";
+import StockTransactionsPanel from "./stock-transactions-panel";
 import type {
   CreateWarehouseRequest,
   InventoryItem,
   PaginatedResponse,
   ProblemDetails,
   StockTransferRequest,
+  UpdateWarehouseRequest,
   Warehouse
 } from "../../../types/api";
 
@@ -83,6 +90,8 @@ function formatQuantity(value: number) {
 }
 
 export default function InventoryPage() {
+  const [activeTab, setActiveTab] = useState<"inventory" | "transactions">("inventory");
+  const [allWarehouses, setAllWarehouses] = useState<Warehouse[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehousesReady, setWarehousesReady] = useState(false);
   const [warehousesLoadFailed, setWarehousesLoadFailed] = useState(false);
@@ -95,6 +104,8 @@ export default function InventoryPage() {
   const [page, setPage] = useState(1);
   const [inventoryRequestState, setInventoryRequestState] = useState<InventoryRequestState | null>(null);
   const [inventoryReloadCount, setInventoryReloadCount] = useState(0);
+  const [transactionReloadCount, setTransactionReloadCount] = useState(0);
+  const [transactionPage, setTransactionPage] = useState(1);
   const [successMessage, setSuccessMessage] = useState("");
 
   const [createWarehouseModalOpen, setCreateWarehouseModalOpen] = useState(false);
@@ -106,6 +117,19 @@ export default function InventoryPage() {
   });
   const [createWarehouseError, setCreateWarehouseError] = useState("");
   const [createWarehouseSaving, setCreateWarehouseSaving] = useState(false);
+  const [warehouseActionBusy, setWarehouseActionBusy] = useState(false);
+  const [warehouseActionError, setWarehouseActionError] = useState("");
+  const [editWarehouseTarget, setEditWarehouseTarget] = useState<Warehouse | null>(null);
+  const [editWarehouseForm, setEditWarehouseForm] = useState<UpdateWarehouseRequest>({
+    name: "",
+    address: null,
+    phone: null,
+    isDefault: false,
+    isActive: true
+  });
+  const [editWarehouseError, setEditWarehouseError] = useState("");
+  const [deleteWarehouseTarget, setDeleteWarehouseTarget] = useState<Warehouse | null>(null);
+  const [deleteWarehouseError, setDeleteWarehouseError] = useState("");
 
   const [transferModalOpen, setTransferModalOpen] = useState(false);
   const [transferSourceWarehouseId, setTransferSourceWarehouseId] = useState("");
@@ -119,6 +143,7 @@ export default function InventoryPage() {
   const [transferError, setTransferError] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
   const transferIdRef = useRef<string | null>(null);
+  const warehouseActionLockRef = useRef(false);
 
   const inventoryRequestKey = `${page}:${selectedWarehouseId}:${search}:${lowStockOnly}:${inventoryReloadCount}`;
   const currentInventoryRequest = inventoryRequestState?.requestKey === inventoryRequestKey
@@ -155,6 +180,7 @@ export default function InventoryPage() {
         if (!active) return;
         setWarehousesLoadFailed(false);
         setWarehouseError("");
+        setAllWarehouses(result);
         const activeWarehouses = result.filter((warehouse) => warehouse.isActive);
         setWarehouses(activeWarehouses);
         setSelectedWarehouseId((current) =>
@@ -277,7 +303,15 @@ export default function InventoryPage() {
 
   const reloadData = useCallback(() => {
     setInventoryReloadCount((current) => current + 1);
+    setTransactionReloadCount((current) => current + 1);
+    setTransactionPage(1);
     setWarehouseReloadCount((current) => current + 1);
+  }, []);
+
+  const reloadStockData = useCallback(() => {
+    setInventoryReloadCount((current) => current + 1);
+    setTransactionReloadCount((current) => current + 1);
+    setTransactionPage(1);
   }, []);
 
   function openCreateWarehouseModal() {
@@ -321,6 +355,159 @@ export default function InventoryPage() {
       setCreateWarehouseError(getApiErrorMessage(error, "Không thể tạo kho. Hãy kiểm tra thông tin và thử lại."));
     } finally {
       setCreateWarehouseSaving(false);
+    }
+  }
+
+  function beginWarehouseAction() {
+    if (warehouseActionLockRef.current) return false;
+    warehouseActionLockRef.current = true;
+    setWarehouseActionBusy(true);
+    return true;
+  }
+
+  function endWarehouseAction() {
+    warehouseActionLockRef.current = false;
+    setWarehouseActionBusy(false);
+  }
+
+  function applyWarehouseUpdate(id: string, request: UpdateWarehouseRequest) {
+    const updatedWarehouse: Warehouse = { id, ...request };
+    setAllWarehouses((current) =>
+      current.map((warehouse) => {
+        if (warehouse.id === id) return updatedWarehouse;
+        return request.isDefault ? { ...warehouse, isDefault: false } : warehouse;
+      })
+    );
+    setWarehouses((current) => {
+      const updated = current.map((warehouse) => {
+        if (warehouse.id === id) return updatedWarehouse;
+        return request.isDefault ? { ...warehouse, isDefault: false } : warehouse;
+      });
+      if (!request.isActive) return updated.filter((warehouse) => warehouse.id !== id);
+      return current.some((warehouse) => warehouse.id === id) ? updated : [...updated, updatedWarehouse];
+    });
+
+    if (!request.isActive) {
+      const replacementId = warehouses.find((warehouse) => warehouse.id !== id && warehouse.isDefault)?.id
+        ?? warehouses.find((warehouse) => warehouse.id !== id)?.id
+        ?? "";
+      setSelectedWarehouseId((current) => current === id ? replacementId : current);
+    }
+  }
+
+  function openEditWarehouseModal(warehouse: Warehouse) {
+    setEditWarehouseTarget(warehouse);
+    setEditWarehouseForm({
+      name: warehouse.name,
+      address: warehouse.address,
+      phone: warehouse.phone,
+      isDefault: warehouse.isDefault,
+      isActive: warehouse.isActive
+    });
+    setEditWarehouseError("");
+    setWarehouseActionError("");
+    setSuccessMessage("");
+  }
+
+  function closeEditWarehouseModal() {
+    if (warehouseActionBusy) return;
+    setEditWarehouseTarget(null);
+    setEditWarehouseError("");
+  }
+
+  async function submitEditWarehouse(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setEditWarehouseError("");
+    if (!editWarehouseTarget) return;
+
+    const name = editWarehouseForm.name.trim();
+    if (!name) {
+      setEditWarehouseError("Tên kho không được để trống.");
+      return;
+    }
+    if (!beginWarehouseAction()) return;
+
+    const request: UpdateWarehouseRequest = {
+      name,
+      address: editWarehouseForm.address?.trim() || null,
+      phone: editWarehouseForm.phone?.trim() || null,
+      isDefault: editWarehouseForm.isDefault,
+      isActive: editWarehouseForm.isActive
+    };
+
+    try {
+      await updateWarehouse(editWarehouseTarget.id, request);
+      applyWarehouseUpdate(editWarehouseTarget.id, request);
+      setEditWarehouseTarget(null);
+      setSuccessMessage(`Đã cập nhật kho "${name}" thành công.`);
+      reloadData();
+    } catch (error: unknown) {
+      setEditWarehouseError(getApiErrorMessage(error, "Không thể cập nhật kho. Hãy kiểm tra thông tin và thử lại."));
+    } finally {
+      endWarehouseAction();
+    }
+  }
+
+  async function toggleWarehouseActive(warehouse: Warehouse, isActive: boolean) {
+    setWarehouseActionError("");
+    setSuccessMessage("");
+    if (!beginWarehouseAction()) return;
+
+    try {
+      const latestWarehouse = await getWarehouseById(warehouse.id);
+      const request: UpdateWarehouseRequest = {
+        name: latestWarehouse.name,
+        address: latestWarehouse.address,
+        phone: latestWarehouse.phone,
+        isDefault: latestWarehouse.isDefault,
+        isActive
+      };
+      await updateWarehouse(warehouse.id, request);
+      applyWarehouseUpdate(warehouse.id, request);
+      setSuccessMessage(`Đã ${request.isActive ? "tiếp tục" : "dừng"} hoạt động kho "${request.name}".`);
+      reloadData();
+    } catch (error: unknown) {
+      setWarehouseActionError(getApiErrorMessage(error, "Không thể thay đổi trạng thái kho."));
+    } finally {
+      endWarehouseAction();
+    }
+  }
+
+  function openDeleteWarehouseConfirmation(warehouse: Warehouse) {
+    setDeleteWarehouseTarget(warehouse);
+    setDeleteWarehouseError("");
+    setWarehouseActionError("");
+    setSuccessMessage("");
+  }
+
+  function closeDeleteWarehouseConfirmation() {
+    if (warehouseActionBusy) return;
+    setDeleteWarehouseTarget(null);
+    setDeleteWarehouseError("");
+  }
+
+  async function confirmDeleteWarehouse() {
+    if (!deleteWarehouseTarget || !beginWarehouseAction()) return;
+    setDeleteWarehouseError("");
+
+    try {
+      await deleteWarehouse(deleteWarehouseTarget.id);
+      const deletedId = deleteWarehouseTarget.id;
+      setAllWarehouses((current) => current.filter((warehouse) => warehouse.id !== deletedId));
+      setWarehouses((current) => current.filter((warehouse) => warehouse.id !== deletedId));
+      if (selectedWarehouseId === deletedId) {
+        const replacementId = warehouses.find((warehouse) => warehouse.id !== deletedId && warehouse.isDefault)?.id
+          ?? warehouses.find((warehouse) => warehouse.id !== deletedId)?.id
+          ?? "";
+        setSelectedWarehouseId(replacementId);
+      }
+      setDeleteWarehouseTarget(null);
+      setSuccessMessage(`Đã xóa kho "${deleteWarehouseTarget.name}" thành công.`);
+      reloadData();
+    } catch (error: unknown) {
+      setDeleteWarehouseError(getApiErrorMessage(error, "Không thể xóa kho."));
+    } finally {
+      endWarehouseAction();
     }
   }
 
@@ -419,11 +606,11 @@ export default function InventoryPage() {
       await createStockTransfer(request);
       const sourceName = warehouses.find((warehouse) => warehouse.id === transferSourceWarehouseId)?.name ?? "kho nguồn";
       const destinationName = warehouses.find((warehouse) => warehouse.id === transferDestinationWarehouseId)?.name ?? "kho đích";
-      setSuccessMessage(`Đã chuyển hàng thành công từ ${sourceName} đến ${destinationName}. Tồn kho đã được tải lại.`);
+      setSuccessMessage(`Đã chuyển hàng thành công từ ${sourceName} đến ${destinationName}. Tồn kho và lịch sử giao dịch đã được tải lại.`);
       setTransferModalOpen(false);
       setTransferLines([]);
       transferIdRef.current = null;
-      setInventoryReloadCount((current) => current + 1);
+      reloadStockData();
     } catch (error: unknown) {
       setTransferError(getApiErrorMessage(error, "Không thể chuyển kho. Hãy kiểm tra thông tin và thử lại."));
     } finally {
@@ -441,7 +628,7 @@ export default function InventoryPage() {
           <button type="button" onClick={reloadData} className="font-bold underline">Thử tải lại kho</button>
         </div>
       )}
-      {loadError && (
+      {activeTab === "inventory" && loadError && (
         <div role="alert" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-red-50 px-4 py-3 text-xs text-red-700">
           <span>{loadError}</span>
           <button type="button" onClick={reloadData} className="font-bold underline">Thử lại</button>
@@ -454,9 +641,11 @@ export default function InventoryPage() {
       )}
       <PageHeader
         eyebrow="QUẢN LÝ CHUỖI CUNG ỨNG　›　KHO & KIỂM KÊ TỒN"
-        title="Kiểm Kê & Quản Trị Tồn Kho Nông Sản"
-        description="Theo dõi số lượng thực tế, lượng giữ chỗ và tồn khả dụng theo từng kho."
-        action={
+        title={activeTab === "inventory" ? "Kiểm Kê & Quản Trị Tồn Kho Nông Sản" : "Quản Lý Giao Dịch Kho"}
+        description={activeTab === "inventory"
+          ? "Theo dõi số lượng thực tế, lượng giữ chỗ và tồn khả dụng theo từng kho."
+          : "Tra cứu lịch sử và lập phiếu giao dịch kho theo từng kho, sản phẩm."}
+        action={activeTab === "inventory" ? (
           <div className="flex flex-wrap items-center justify-end gap-2">
             <button
               type="button"
@@ -480,8 +669,95 @@ export default function InventoryPage() {
               </small>
             )}
           </div>
-        }
+        ) : undefined}
       />
+
+      <div role="tablist" aria-label="Nội dung quản lý kho" className="mb-4 flex gap-2 border-b border-[#dfe8dd]">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "inventory"}
+          onClick={() => setActiveTab("inventory")}
+          className={`px-4 py-3 text-xs font-bold ${activeTab === "inventory" ? "border-b-2 border-[#006948] text-[#006948]" : "text-[#66736a]"}`}
+        >
+          Tồn kho
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "transactions"}
+          onClick={() => setActiveTab("transactions")}
+          className={`px-4 py-3 text-xs font-bold ${activeTab === "transactions" ? "border-b-2 border-[#006948] text-[#006948]" : "text-[#66736a]"}`}
+        >
+          Giao dịch kho
+        </button>
+      </div>
+
+      {activeTab === "inventory" ? (
+      <>
+      <Panel title="Danh sách kho">
+        <p className="mb-4 text-xs text-[#66736a]">
+          Quản lý kho đang hoạt động và ngừng hoạt động. Chỉ kho đang hoạt động xuất hiện trong các lựa chọn nghiệp vụ.
+        </p>
+        {warehouseActionError && (
+          <div role="alert" className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+            {warehouseActionError}
+          </div>
+        )}
+        {allWarehouses.length === 0 ? (
+          <p className="rounded-lg bg-[#f7faf5] px-4 py-6 text-center text-xs text-[#66736a]">
+            {warehousesReady ? "Chưa có kho nào." : "Đang tải danh sách kho..."}
+          </p>
+        ) : (
+          <div className="divide-y divide-[#e7eee4]">
+            {allWarehouses.map((warehouse) => (
+              <div key={warehouse.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <b className="text-sm">{warehouse.name}</b>
+                    <StatusBadge tone={warehouse.isActive ? "green" : "gray"}>
+                      {warehouse.isActive ? "Đang hoạt động" : "Ngừng hoạt động"}
+                    </StatusBadge>
+                    {warehouse.isDefault && <StatusBadge tone="blue">Kho mặc định</StatusBadge>}
+                  </div>
+                  <small className="mt-1 block break-all text-[10px] text-[#66736a]">
+                    Mã kho: {warehouse.id}
+                    {warehouse.address ? ` · ${warehouse.address}` : ""}
+                    {warehouse.phone ? ` · ${warehouse.phone}` : ""}
+                  </small>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openEditWarehouseModal(warehouse)}
+                    disabled={warehouseActionBusy}
+                    className="flex items-center gap-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs font-semibold text-[#006948] disabled:opacity-50"
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> Sửa
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void toggleWarehouseActive(warehouse, !warehouse.isActive)}
+                    disabled={warehouseActionBusy}
+                    className="flex items-center gap-1 rounded-lg border border-[#dfe8dd] px-3 py-2 text-xs font-semibold text-[#425247] disabled:opacity-50"
+                  >
+                    <Power className="h-3.5 w-3.5" />
+                    {warehouse.isActive ? "Dừng hoạt động" : "Tiếp tục hoạt động"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDeleteWarehouseConfirmation(warehouse)}
+                    disabled={warehouseActionBusy}
+                    className="flex items-center gap-1 rounded-lg border border-red-100 px-3 py-2 text-xs font-semibold text-red-600 disabled:opacity-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Xóa
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
 
       <KpiGrid
         items={[
@@ -645,6 +921,17 @@ export default function InventoryPage() {
           )}
         </Panel>
       </div>
+      </>
+      ) : (
+        <StockTransactionsPanel
+          warehouses={warehouses}
+          page={transactionPage}
+          refreshVersion={transactionReloadCount}
+          onOpenTransfer={openTransferModal}
+          onStockChanged={reloadStockData}
+          onPageChange={setTransactionPage}
+        />
+      )}
 
       {createWarehouseModalOpen && (
         <AdminModal
@@ -731,6 +1018,147 @@ export default function InventoryPage() {
               </div>
             )}
           </form>
+        </AdminModal>
+      )}
+
+      {editWarehouseTarget && (
+        <AdminModal
+          title="Sửa thông tin kho"
+          description="Các lựa chọn nghiệp vụ chỉ hiển thị những kho đang hoạt động."
+          onClose={closeEditWarehouseModal}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={closeEditWarehouseModal}
+                disabled={warehouseActionBusy}
+                className="rounded-lg border border-[#dfe8dd] px-4 py-2 text-xs font-bold text-[#425247] disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                form="edit-warehouse-form"
+                disabled={warehouseActionBusy}
+                className="rounded-lg bg-[#006948] px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {warehouseActionBusy ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
+            </>
+          }
+        >
+          <form id="edit-warehouse-form" onSubmit={(event) => void submitEditWarehouse(event)} className="space-y-4">
+            <label className="block text-xs font-semibold">
+              Tên kho <span className="text-red-600">*</span>
+              <input
+                required
+                maxLength={200}
+                autoFocus
+                value={editWarehouseForm.name}
+                disabled={warehouseActionBusy}
+                onChange={(event) => {
+                  setEditWarehouseForm((current) => ({ ...current, name: event.target.value }));
+                  setEditWarehouseError("");
+                }}
+                className="mt-1 w-full rounded border border-[#dfe8dd] p-2 text-xs font-normal"
+              />
+            </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-xs font-semibold">
+                Địa chỉ
+                <input
+                  value={editWarehouseForm.address ?? ""}
+                  disabled={warehouseActionBusy}
+                  onChange={(event) => setEditWarehouseForm((current) => ({ ...current, address: event.target.value }))}
+                  className="mt-1 w-full rounded border border-[#dfe8dd] p-2 text-xs font-normal"
+                />
+              </label>
+              <label className="block text-xs font-semibold">
+                Số điện thoại
+                <input
+                  type="tel"
+                  value={editWarehouseForm.phone ?? ""}
+                  disabled={warehouseActionBusy}
+                  onChange={(event) => setEditWarehouseForm((current) => ({ ...current, phone: event.target.value }))}
+                  className="mt-1 w-full rounded border border-[#dfe8dd] p-2 text-xs font-normal"
+                />
+              </label>
+            </div>
+            <label className="flex items-start gap-2 rounded-lg border border-[#dfe8dd] p-3 text-xs">
+              <input
+                type="checkbox"
+                checked={editWarehouseForm.isDefault}
+                disabled={warehouseActionBusy}
+                onChange={(event) => setEditWarehouseForm((current) => ({ ...current, isDefault: event.target.checked }))}
+                className="mt-0.5"
+              />
+              <span>
+                <b className="block">Đặt làm kho mặc định</b>
+                <span className="text-[#66736a]">Kho mặc định hiện tại sẽ được thay thế.</span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 rounded-lg border border-[#dfe8dd] p-3 text-xs">
+              <input
+                type="checkbox"
+                checked={editWarehouseForm.isActive}
+                disabled={warehouseActionBusy}
+                onChange={(event) => setEditWarehouseForm((current) => ({ ...current, isActive: event.target.checked }))}
+                className="mt-0.5"
+              />
+              <span>
+                <b className="block">Kho đang hoạt động</b>
+                <span className="text-[#66736a]">Kho ngừng hoạt động sẽ không xuất hiện trong các lựa chọn nghiệp vụ.</span>
+              </span>
+            </label>
+            {editWarehouseError && (
+              <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+                {editWarehouseError}
+              </div>
+            )}
+          </form>
+        </AdminModal>
+      )}
+
+      {deleteWarehouseTarget && (
+        <AdminModal
+          title="Xác nhận xóa kho"
+          description="Đây là thao tác xóa cứng và không thể hoàn tác."
+          onClose={closeDeleteWarehouseConfirmation}
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={closeDeleteWarehouseConfirmation}
+                disabled={warehouseActionBusy}
+                className="rounded-lg border border-[#dfe8dd] px-4 py-2 text-xs font-bold text-[#425247] disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteWarehouse()}
+                disabled={warehouseActionBusy}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white disabled:opacity-50"
+              >
+                {warehouseActionBusy ? "Đang xóa..." : "Xác nhận xóa"}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-3 text-xs">
+            <div className="rounded-lg bg-[#f7faf5] p-3">
+              <b className="block text-sm">{deleteWarehouseTarget.name}</b>
+              <span className="mt-1 block break-all text-[#66736a]">Mã kho: {deleteWarehouseTarget.id}</span>
+            </div>
+            <p className="rounded-lg bg-amber-50 p-3 text-amber-900">
+              Kho đang được tồn kho, giao dịch kho, đơn mua hàng hoặc đơn hàng tham chiếu sẽ không thể xóa.
+            </p>
+            {deleteWarehouseError && (
+              <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-red-700">
+                {deleteWarehouseError}
+              </div>
+            )}
+          </div>
         </AdminModal>
       )}
 

@@ -276,6 +276,18 @@ export interface CreateWarehouseRequest {
   isDefault: boolean;
 }
 
+export interface UpdateWarehouseRequest {
+  name: string;
+  address: string | null;
+  phone: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+}
+
+export interface UpdateWarehouseResponse {
+  message: string;
+}
+
 export interface Supplier {
   id: string;
   code: string;
@@ -323,6 +335,18 @@ export interface StockTransaction {
   createdBy?: string | null;
   createdAt: string;
   lines: StockTransactionLine[];
+}
+
+export interface StockTransactionQuery {
+  transactionType?: "Import" | "Export" | "Count" | "Adjust";
+  productId?: string;
+  warehouseId?: string;
+  referenceType?: string;
+  referenceId?: string;
+  fromDate?: string;
+  toDate?: string;
+  page?: number;
+  pageSize?: number;
 }
 
 export interface StockTransactionRequest {
