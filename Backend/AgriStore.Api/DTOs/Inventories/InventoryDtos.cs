@@ -8,6 +8,9 @@ public sealed record InventoryListQuery
     public Guid? ProductId { get; init; }
     public Guid? WarehouseId { get; init; }
 
+    [MaxLength(200)]
+    public string? Search { get; init; }
+
     [Range(1, int.MaxValue)]
     public int Page { get; init; } = 1;
 
@@ -19,6 +22,9 @@ public sealed record InventoryListQuery
 public sealed record LowStockQuery
 {
     public Guid? WarehouseId { get; init; }
+
+    [MaxLength(200)]
+    public string? Search { get; init; }
 
     [Range(1, int.MaxValue)]
     public int Page { get; init; } = 1;
