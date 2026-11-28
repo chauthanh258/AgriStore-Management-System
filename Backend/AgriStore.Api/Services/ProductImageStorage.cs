@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 
 namespace AgriStore.Api.Services;
 
@@ -13,10 +14,12 @@ public sealed record ProductImageStorageResult(string? ImageUrl, string? Error)
     public bool Succeeded => ImageUrl is not null;
 }
 
-public sealed class ProductImageStorage(IWebHostEnvironment environment) : IProductImageStorage
+public sealed class ProductImageStorage(
+    ICloudinaryImageClient cloudinary,
+    IOptions<CloudinaryOptions> options) : IProductImageStorage
 {
     public const long MaxFileSizeBytes = 5 * 1024 * 1024;
-    private const string UrlPrefix = "/uploads/products/";
+    private const string ProductFolder = "products";
 
     public async Task<ProductImageStorageResult> SaveAsync(
         IFormFile file,
@@ -36,55 +39,82 @@ public sealed class ProductImageStorage(IWebHostEnvironment environment) : IProd
             return new(null, "Chỉ chấp nhận ảnh JPEG, PNG hoặc WebP hợp lệ.");
         }
 
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var directory = Path.Combine(webRoot, "uploads", "products");
-        Directory.CreateDirectory(directory);
+        var imageId = Guid.NewGuid().ToString("N");
+        var publicId = $"{ProductFolder}/{imageId}";
+        await using var source = file.OpenReadStream();
+        var result = await cloudinary.UploadImageAsync(
+            source,
+            $"{imageId}{imageFormat}",
+            publicId,
+            cancellationToken);
 
-        var fileName = $"{Guid.NewGuid():N}{imageFormat}";
-        var filePath = Path.Combine(directory, fileName);
-        try
-        {
-            await using var output = new FileStream(
-                filePath,
-                FileMode.CreateNew,
-                FileAccess.Write,
-                FileShare.None,
-                81920,
-                FileOptions.Asynchronous);
-            await using var source = file.OpenReadStream();
-            await source.CopyToAsync(output, cancellationToken);
-        }
-        catch
-        {
-            File.Delete(filePath);
-            throw;
-        }
-
-        return new($"{UrlPrefix}{fileName}", null);
+        return new(result.SecureUrl, null);
     }
 
-    public Task DeleteAsync(string imageUrl, CancellationToken cancellationToken)
+    public async Task DeleteAsync(string imageUrl, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (!imageUrl.StartsWith(UrlPrefix, StringComparison.Ordinal))
+        if (!TryGetPublicId(imageUrl, out var publicId))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        var fileName = imageUrl[UrlPrefix.Length..];
-        if (string.IsNullOrWhiteSpace(fileName) || Path.GetFileName(fileName) != fileName)
+        await cloudinary.DeleteImageAsync(publicId, cancellationToken);
+    }
+
+    private bool TryGetPublicId(string imageUrl, out string publicId)
+    {
+        publicId = string.Empty;
+        if (!Uri.TryCreate(imageUrl, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(uri.Host, "res.cloudinary.com", StringComparison.OrdinalIgnoreCase))
         {
-            return Task.CompletedTask;
+            return false;
         }
 
-        var webRoot = environment.WebRootPath ?? Path.Combine(environment.ContentRootPath, "wwwroot");
-        var filePath = Path.Combine(webRoot, "uploads", "products", fileName);
-        if (File.Exists(filePath))
+        var cloudName = options.Value.CloudName;
+        if (string.IsNullOrWhiteSpace(cloudName))
         {
-            File.Delete(filePath);
+            throw new InvalidOperationException(
+                "Cloudinary:CloudName phải được cấu hình để xóa ảnh sản phẩm trên Cloudinary.");
         }
 
-        return Task.CompletedTask;
+        var urlPrefix = $"/{cloudName}/image/upload/";
+        if (!uri.AbsolutePath.StartsWith(urlPrefix, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var assetPath = uri.AbsolutePath[urlPrefix.Length..];
+        var pathSegments = assetPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (pathSegments.Length == 3 && IsVersionSegment(pathSegments[0]))
+        {
+            pathSegments = pathSegments[1..];
+        }
+
+        if (pathSegments.Length != 2 ||
+            !string.Equals(pathSegments[0], ProductFolder, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var fileName = pathSegments[1];
+        var extensionIndex = fileName.LastIndexOf('.');
+        var id = extensionIndex > 0 ? fileName[..extensionIndex] : fileName;
+        if (!Guid.TryParseExact(id, "N", out _))
+        {
+            return false;
+        }
+
+        publicId = $"{ProductFolder}/{id}";
+        return true;
+    }
+
+    private static bool IsVersionSegment(string segment)
+    {
+        return segment.Length > 1 &&
+            segment[0] == 'v' &&
+            int.TryParse(segment.AsSpan(1), out _);
     }
 
     private static string? GetImageFormat(byte[] header, int bytesRead)

@@ -84,13 +84,16 @@ public sealed record CreateProductRequest
     [MaxLength(500)]
     public string? ShortDescription { get; init; }
 
-    [Range(typeof(decimal), "0", "9999999999999999.99")]
+    [Range(typeof(decimal), "0", "999999999999.99",
+        ParseLimitsInInvariantCulture = true)]
     public decimal CostPrice { get; init; }
 
-    [Range(typeof(decimal), "0.01", "9999999999999999.99")]
+    [Range(typeof(decimal), "0.01", "999999999999.99",
+        ParseLimitsInInvariantCulture = true)]
     public decimal SellingPrice { get; init; }
 
-    [Range(typeof(decimal), "0", "999999999999999.999")]
+    [Range(typeof(decimal), "0", "999999999999.999",
+        ParseLimitsInInvariantCulture = true)]
     public decimal MinStockAlert { get; init; }
 
     [Range(1, int.MaxValue)]
@@ -121,13 +124,16 @@ public sealed record UpdateProductRequest
     [MaxLength(500)]
     public string? ShortDescription { get; init; }
 
-    [Range(typeof(decimal), "0", "9999999999999999.99")]
+    [Range(typeof(decimal), "0", "999999999999.99",
+        ParseLimitsInInvariantCulture = true)]
     public decimal CostPrice { get; init; }
 
-    [Range(typeof(decimal), "0.01", "9999999999999999.99")]
+    [Range(typeof(decimal), "0.01", "999999999999.99",
+        ParseLimitsInInvariantCulture = true)]
     public decimal SellingPrice { get; init; }
 
-    [Range(typeof(decimal), "0", "999999999999999.999")]
+    [Range(typeof(decimal), "0", "999999999999.999",
+        ParseLimitsInInvariantCulture = true)]
     public decimal MinStockAlert { get; init; }
 
     [Range(1, int.MaxValue)]

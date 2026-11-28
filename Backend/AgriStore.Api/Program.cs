@@ -100,6 +100,9 @@ builder.Services.AddScoped<IWarehouseService, WarehouseService>();
 builder.Services.AddScoped<IUnitService, UnitService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IProductReviewService, ProductReviewService>();
+builder.Services.Configure<CloudinaryOptions>(
+    builder.Configuration.GetSection(CloudinaryOptions.SectionName));
+builder.Services.AddSingleton<ICloudinaryImageClient, CloudinaryImageClient>();
 builder.Services.AddScoped<IProductImageStorage, ProductImageStorage>();
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();

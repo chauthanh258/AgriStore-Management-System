@@ -745,6 +745,8 @@ export default function ProductsAdminPage() {
                   {images.map((image) => (
                     <div key={image.id} className="relative mb-2">
                       <Image
+                        width={200}
+                        height={200}
                         src={image.imageUrl}
                         alt=""
                         className={`aspect-square w-full rounded-lg object-cover ${image.isMain ? "ring-2 ring-[#006948]" : ""}`}
@@ -768,6 +770,8 @@ export default function ProductsAdminPage() {
                   {newImages.map((file, index) => (
                     <div key={`${file.name}-${index}`} className="relative mb-2">
                       <Image
+                        width={200}
+                        height={200}
                         src={URL.createObjectURL(file)}
                         alt=""
                         className={`aspect-square w-full rounded-lg object-cover opacity-70 ${newMainIndex === index ? "ring-2 ring-[#006948]" : ""}`}
@@ -911,7 +915,7 @@ export default function ProductsAdminPage() {
                     </label>
                     <input
                       required={isRequired}
-                      min={key === "sellingPrice" ? 0.01 : 0}
+                      min={key === "sellingPrice" ? 1 : 0}
                       type="number"
                       value={productForm[key] ?? ""}
                       onChange={(e) =>
