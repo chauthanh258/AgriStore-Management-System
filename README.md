@@ -17,9 +17,14 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=<external-ho
 dotnet user-secrets set "Jwt:Key" "<chuoi-ky-it-nhat-32-ky-tu>" --project Backend/AgriStore.Api
 dotnet user-secrets set "Jwt:Issuer" "AgriStore.Api" --project Backend/AgriStore.Api
 dotnet user-secrets set "Jwt:Audience" "AgriStore.Client" --project Backend/AgriStore.Api
+dotnet user-secrets set "Cloudinary:CloudName" "<cloud-name>" --project Backend/AgriStore.Api
+dotnet user-secrets set "Cloudinary:ApiKey" "<api-key>" --project Backend/AgriStore.Api
+dotnet user-secrets set "Cloudinary:ApiSecret" "<api-secret>" --project Backend/AgriStore.Api
 ```
 
-Thay các giá trị trong dấu `<...>` bằng thông tin **External Database URL** của nhà cung cấp PostgreSQL. Host nội bộ như `dpg-...` có thể không truy cập được từ máy local; hãy dùng external host/domain và giữ `SSL Mode=Require` nếu nhà cung cấp yêu cầu SSL.
+Thay các giá trị trong dấu `<...>` bằng thông tin tương ứng. Với PostgreSQL, dùng **External Database URL** của nhà cung cấp; host nội bộ như `dpg-...` có thể không truy cập được từ máy local, vì vậy hãy dùng external host/domain và giữ `SSL Mode=Require` nếu nhà cung cấp yêu cầu SSL.
+
+Ảnh sản phẩm mới được upload lên Cloudinary. Cấu hình `Cloudinary:CloudName`, `Cloudinary:ApiKey` và `Cloudinary:ApiSecret` bằng User Secrets khi chạy local hoặc bằng biến môi trường tương ứng khi deploy. Không commit API secret vào repository. Ảnh local đã lưu trước đây không được chuyển lên Cloudinary; URL cũ trong database vẫn được giữ nguyên nhưng ảnh chỉ tiếp tục hiển thị nếu file local cũ còn được host.
 
 Kiểm tra secret đã lưu:
 
