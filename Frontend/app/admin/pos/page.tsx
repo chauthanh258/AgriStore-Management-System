@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { IconButton, PageHeader, StatusBadge } from "../../../components/admin/admin-ui";
 import { customers as mockCustomers } from "../../../data/admin-mock";
 import { products as mockProducts } from "../../../data/mock";
@@ -8,6 +8,8 @@ import { formatCurrency } from "../../../lib/formatters";
 import { getCustomers } from "../../../services/customers/customer.service";
 import { createPayment } from "../../../services/payments/payment.service";
 import { getProducts } from "../../../services/products/product.service";
+import { getInventories } from "../../../services/inventory/inventory.service";
+import { getWarehouses } from "../../../services/warehouses/warehouse.service";
 import {
   applyOrderCoupon,
   createPosOrder
@@ -24,6 +26,9 @@ export default function PosPage() {
       ? mockCustomers.map(({ id, fullName, phone, memberTier }) => ({ id, fullName, phone, memberTier }))
       : []
   );
+  const [warehouseList, setWarehouseList] = useState<{ id: string; name: string }[]>([]);
+  const [warehouseId, setWarehouseId] = useState("");
+  const [availableByProduct, setAvailableByProduct] = useState<Record<string, number>>({});
   const [cart, setCart] = useState<Record<string, number>>(() =>
     useMock ? { [mockProducts[0].id]: 2, [mockProducts[1].id]: 1 } : {}
   );
@@ -36,23 +41,60 @@ export default function PosPage() {
   const [discount, setDiscount] = useState(0);
   const [couponCode, setCouponCode] = useState("");
   const [loading, setLoading] = useState(!useMock);
+  const [stockLoading, setStockLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const inventoryRequest = useRef(0);
+
+  const loadWarehouseStock = useCallback(async (nextWarehouseId: string) => {
+    const requestId = ++inventoryRequest.current;
+    setWarehouseId(nextWarehouseId);
+    setStockLoading(true);
+    setAvailableByProduct({});
+    setLoadError("");
+    try {
+      const result = await getInventories({
+        warehouseId: nextWarehouseId,
+        page: 1,
+        pageSize: 100
+      });
+      if (requestId === inventoryRequest.current) {
+        setAvailableByProduct(
+          Object.fromEntries(result.items.map((item) => [item.productId, item.availableQuantity]))
+        );
+      }
+    } catch (error: unknown) {
+      if (requestId === inventoryRequest.current) {
+        setLoadError(error instanceof Error ? error.message : "Không thể tải tồn kho.");
+      }
+    } finally {
+      if (requestId === inventoryRequest.current) setStockLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (useMock) return;
     Promise.all([
       getProducts({ page: 1, pageSize: 100 }),
-      getCustomers({ page: 1, pageSize: 100 })
+      getCustomers({ page: 1, pageSize: 100 }),
+      getWarehouses()
     ])
-      .then(([productResult, customerResult]) => {
+      .then(async ([productResult, customerResult, warehouseResult]) => {
         setProductList(productResult.items);
         setCustomerList(customerResult.items.map(({ id, fullName, phone }) => ({ id, fullName, phone })));
+        const activeWarehouses = warehouseResult.filter((warehouse) => warehouse.isActive);
+        setWarehouseList(activeWarehouses);
+        const defaultWarehouse = activeWarehouses.find((warehouse) => warehouse.isDefault);
+        if (activeWarehouses.length) {
+          await loadWarehouseStock((defaultWarehouse ?? activeWarehouses[0]).id);
+        } else {
+          setLoadError("Không có kho đang hoạt động để xuất hàng.");
+        }
       })
       .catch((error: unknown) =>
         setLoadError(error instanceof Error ? error.message : "Không thể tải sản phẩm và khách hàng.")
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [loadWarehouseStock]);
 
   const visibleProducts = useMemo(
     () =>
@@ -80,13 +122,25 @@ export default function PosPage() {
   const appliedDiscount = useMock ? Math.min(Math.max(0, discount), subtotal) : 0;
   const total = subtotal - appliedDiscount;
   const selectedCustomer = customerList.find((customer) => customer.id === customerId);
+  const hasInsufficientStock = !useMock && Object.entries(cart).some(
+    ([id, quantity]) => quantity > (availableByProduct[id] ?? 0)
+  );
 
   function add(id: string) {
+    if (!useMock && (availableByProduct[id] ?? 0) <= (cart[id] ?? 0)) {
+      setMessage("Số lượng trong kho không đủ cho sản phẩm này.");
+      return;
+    }
     setCart((current) => ({ ...current, [id]: (current[id] ?? 0) + 1 }));
     setMessage("");
   }
 
   function changeQuantity(id: string, delta: number) {
+    if (delta > 0 && !useMock &&
+        (cart[id] ?? 0) >= (availableByProduct[id] ?? 0)) {
+      setMessage("Số lượng trong kho không đủ cho sản phẩm này.");
+      return;
+    }
     setCart((current) => {
       const quantity = (current[id] ?? 0) + delta;
       if (quantity <= 0) {
@@ -116,6 +170,7 @@ export default function PosPage() {
       } else {
         createdOrder = await createPosOrder({
           customerId: selectedCustomer?.id ?? null,
+          warehouseId,
           items: Object.entries(cart).map(([productId, quantity]) => ({ productId, quantity }))
         });
         const discountedOrder = couponCode.trim()
@@ -169,16 +224,33 @@ export default function PosPage() {
           <div className="mb-4 flex gap-2 rounded-xl border border-[#dfe8dd] bg-white p-3">
             <input autoFocus className="min-w-0 flex-1 rounded-lg border p-3 text-xs" placeholder="Tìm sản phẩm hoặc SKU..." value={search} onChange={(event) => setSearch(event.target.value)} />
           </div>
+          {!useMock && (
+            <label className="mb-4 block rounded-xl border border-[#dfe8dd] bg-white p-3 text-xs font-semibold">
+              Kho xuất hàng
+              <select
+                className="mt-2 w-full rounded-lg border p-3 text-xs font-normal"
+                value={warehouseId}
+                onChange={(event) => { void loadWarehouseStock(event.target.value); setMessage(""); }}
+                disabled={loading || saving || warehouseList.length === 0}
+              >
+                {warehouseList.map((warehouse) => (
+                  <option key={warehouse.id} value={warehouse.id}>{warehouse.name}</option>
+                ))}
+              </select>
+              {stockLoading && <small className="mt-1 block font-normal text-[#66736a]">Đang tải tồn kho...</small>}
+            </label>
+          )}
           {loading ? (
             <p className="rounded-xl border border-[#dfe8dd] bg-white p-8 text-center text-xs text-[#66736a]">Đang tải sản phẩm và khách hàng...</p>
           ) : visibleProducts.length ? (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
               {visibleProducts.map((product) => (
-                <button type="button" onClick={() => add(product.id)} className="rounded-xl border border-[#dfe8dd] bg-white p-3 text-left hover:border-[#006948]" key={product.id}>
+                <button type="button" onClick={() => add(product.id)} disabled={!useMock && (stockLoading || (availableByProduct[product.id] ?? 0) <= (cart[product.id] ?? 0))} className="rounded-xl border border-[#dfe8dd] bg-white p-3 text-left hover:border-[#006948] disabled:cursor-not-allowed disabled:opacity-50" key={product.id}>
                   <div className="h-24 rounded bg-cover bg-center" style={{ backgroundImage: `url(${product.mainImageUrl})` }} />
                   <small className="mt-2 block text-[10px] text-[#66736a]">{product.code}</small>
                   <b className="mt-1 block truncate text-xs">{product.name}</b>
                   <span className="text-sm font-bold text-[#006948]">{formatCurrency(product.sellingPrice)}</span>
+                  {!useMock && <small className="mt-1 block text-[10px] text-[#66736a]">Tồn khả dụng: {availableByProduct[product.id] ?? 0} {product.unitName}</small>}
                 </button>
               ))}
             </div>
@@ -199,7 +271,7 @@ export default function PosPage() {
           <div className="space-y-2">
             {Object.entries(cart).map(([id, quantity]) => {
               const product = productList.find((item) => item.id === id);
-              return product ? <div className="flex items-center justify-between rounded-lg border border-[#e7eee4] p-3 text-xs" key={id}><span className="min-w-0"><b className="block truncate">{product.name}</b><small className="text-[#66736a]">{formatCurrency(product.sellingPrice)} · {product.unitName}</small></span><span className="ml-2 flex items-center gap-2"><IconButton label="Giảm số lượng" onClick={() => changeQuantity(id, -1)}>−</IconButton><b>{quantity}</b><IconButton label="Tăng số lượng" onClick={() => changeQuantity(id, 1)}>＋</IconButton></span></div> : null;
+              return product ? <div className="flex items-center justify-between rounded-lg border border-[#e7eee4] p-3 text-xs" key={id}><span className="min-w-0"><b className="block truncate">{product.name}</b><small className="text-[#66736a]">{formatCurrency(product.sellingPrice)} · {product.unitName}{!useMock && ` · Tồn: ${availableByProduct[id] ?? 0}`}</small></span><span className="ml-2 flex items-center gap-2"><IconButton label="Giảm số lượng" onClick={() => changeQuantity(id, -1)}>−</IconButton><b>{quantity}</b><button type="button" aria-label="Tăng số lượng" onClick={() => changeQuantity(id, 1)} disabled={!useMock && quantity >= (availableByProduct[id] ?? 0)} className="rounded-lg border border-[#dfe8dd] px-2.5 py-1.5 text-xs text-[#006948] transition hover:bg-[#eff7ed] disabled:cursor-not-allowed disabled:opacity-50">＋</button></span></div> : null;
             })}
           </div>
           {useMock ? (
@@ -214,7 +286,7 @@ export default function PosPage() {
           )}
           <div className="space-y-3 border-t pt-4 text-xs"><div className="flex justify-between"><span>Tạm tính</span><b>{formatCurrency(subtotal)}</b></div><div className="flex justify-between"><span>Giảm giá</span><b className="text-[#006948]">−{formatCurrency(appliedDiscount)}</b></div><div className="flex justify-between text-lg"><b>Khách phải trả</b><b className="text-[#006948]">{formatCurrency(total)}</b></div></div>
           <div className={`mt-4 grid gap-2 ${useMock ? "grid-cols-3" : "grid-cols-2"}`}>{[["cash", "Tiền mặt"], ["qr", "Chuyển khoản"], ...(useMock ? [["card", "Thẻ"]] : [])].map(([value, label]) => <button type="button" key={value} onClick={() => setPaymentMethod(value as typeof paymentMethod)} className={`rounded-lg p-3 text-[10px] ${paymentMethod === value ? "bg-[#006948] text-white" : "bg-[#f2f7ef]"}`}>{label}</button>)}</div>
-          <button disabled={saving || loading || Object.keys(cart).length === 0} onClick={pay} className="mt-3 w-full rounded-xl bg-[#006948] py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? "ĐANG XỬ LÝ..." : "TẠO ĐƠN & THANH TOÁN"}</button>
+          <button disabled={saving || loading || stockLoading || hasInsufficientStock || (!useMock && !warehouseId) || Object.keys(cart).length === 0} onClick={pay} className="mt-3 w-full rounded-xl bg-[#006948] py-4 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">{saving ? "ĐANG XỬ LÝ..." : "TẠO ĐƠN & THANH TOÁN"}</button>
           {useMock && <p className="mt-2 text-center text-[10px] text-[#66736a]">Chế độ mô phỏng · thao tác không lưu lên máy chủ</p>}
         </aside>
       </div>
